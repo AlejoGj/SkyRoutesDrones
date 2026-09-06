@@ -11,10 +11,18 @@
 
 ## 1. Contexto del Problema
 
-Una empresa de logística y transporte basada en la ciudad de Medellín requiere un módulo de software inicial para gestionar y validar la telemetría de su flota aérea. La compañía opera 6 tipos distintos de drones (Ej: Entrega Ligera, Carga Pesada, Vigilancia, Mapeo Topográfico, Inspección de Infraestructura y Búsqueda/Rescate).
+¡Bienvenido al proyecto SkyRoutes!
 
-El sistema debe recibir datos crudos de telemetría, validando que se cumplan estrictas reglas de negocio (niveles de batería, límites de altitud, coherencia del estado de los motores y validez de las coordenadas). Es un requisito fundamental que la información geográfica corresponda a ubicaciones reales del área metropolitana de Medellín (aproximadamente entre las latitudes 6.15 y 6.35, y longitudes -75.65 a -75.50) y que los datos geográficos sean consumidos de forma verídica.
+En esta ocasión, nos acompañarás a descubrir qué hay detrás de la tecnología de Mario, líder de una innovadora empresa de logística y servicios aéreos en Medellín. Su compañía opera una variada flota distribuida en 6 categorías especializadas: Entrega Ligera, Carga Pesada, Vigilancia, Mapeo Topográfico, Inspección de Infraestructura y Búsqueda/Rescate.
 
-La actualización de la información no será en tiempo real continuo; en su lugar, el sistema permitirá al operador actualizar y validar los datos de los drones bajo demanda a través de un botón de refresco en la futura interfaz gráfica. Si se detectan anomalías en las validaciones, el sistema debe interrumpir la operación con excepciones específicas.
+Para escalar sus operaciones en el Valle de Aburrá, se nos encomendó el desarrollo de un módulo de software enfocado en dos pilares fundamentales:
+
+1. Gestión Inteligente de Pedidos: Una minibase de datos encargada de procesar las solicitudes de los clientes y asignar automáticamente el dron idóneo según la categoría y los requerimientos de la misión.
+
+2. Monitoreo de Telemetría y Mapa en Vivo: Un panel interactivo que consume datos geográficos reales de Medellín (latitudes 6.15 a 6.35 y longitudes -75.65 a -75.50) para ubicar cada aeronave sobre el mapa. Los datos se actualizan bajo demanda cada vez que el operador presiona el botón de refresco.
+
+Para garantizar operaciones seguras, el módulo valida en cada actualización que la batería, la altitud, el estado de los motores y las coordenadas cumplan con esstrictas reglas de negocio. Ante cualquier anomalía, el sistema interrumpe el proceso emitiendo excepciones específicas para alertar al operador.
+
+¿Estás listo para conocer la arquitectura y el código detrás de esta solución? ¡Acompáñanos a explorar el  mundo de esté proyecto!
 
 ---
