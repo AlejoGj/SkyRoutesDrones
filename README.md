@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
+![Banner del proyecto](imagenes/skyroutes-imagen.png)
 
 ##  Información Académica y Equipo
 * **Institución:** Universidad de Medellín (UDEM)
