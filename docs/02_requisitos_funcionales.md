@@ -59,3 +59,27 @@
 *   **Resumen**: Permite al usuario consumir los datos reales de ubicación y estado de los 6 tipos de   drones al presionar un botón, actualizando la información del sistema sin ser en tiempo real continuo.
 *   **Entradas**: Señal de clic del operador / Invocación del método de actualización.  
 *   **Resultado**: Consumo de datos externos y actualización de los atributos de las instancias de los drones.
+
+---
+
+### **RF-06: Registrar Nuevo Usuario en el Sistema**
+*   **Nombre** Registrar Nuevo Usuario
+*   **Resumen**: Actor: Administrador / Sistema. Permite dar de alta a un nuevo usuario (cliente u operador) validando sus datos básicos y rol dentro de la plataforma.
+*   **Entradas**: id_usuario (str), nombre (str), rol (str).
+*   **Resultado**: Creación y almacenamiento de la entidad de usuario en el registro general, o disparo de excepción si el rol es inválido o el ID ya existe.
+
+---
+
+### **RF-07: Registrar Solicitud de Pedido**
+*   **Nombre** Registrar Solicitud de Pedido
+*   **Resumen**: Actor: Cliente / Operador. Permite ingresar una nueva solicitud de servicio especificando los requerimientos de la misión, vinculándola al usuario que la solicita.
+*   **Entradas**: id_pedido (str), id_usuario (str), categoria_requerida (str), peso_carga (float), coordenada_destino (tuple[float, float]).
+*   **Resultado**: Almacenamiento del pedido en la base de datos interna con estado "PENDIENTE".
+
+---
+
+### **RF-08: Cruzar Información y Asignar Dron (Sistema de Control)**
+*   **Nombre** Cruzar Información y Asignar Dron
+*   **Resumen**: Actor: Sistema de Control. Cruza de forma automatizada los datos del pedido pendiente, la disponibilidad de la flota y las 6 categorías especializadas para asignar el dron idóneo.
+*   **Entradas**: id_pedido (str).
+*   **Resultado**: Actualización del estado del pedido a ASIGNADO y enlace del id_dron correspondiente mediante la centralización del sistema de control, o disparo de excepción si no hay recursos disponibles.
