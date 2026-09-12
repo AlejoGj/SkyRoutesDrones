@@ -141,9 +141,9 @@ class Dron:
 
     def __repr__(self) -> str:
         return (
-            f"Dron(id='{self.id_dron}', categoria='{self.categoria}', "
-            f"disponible={self.disponible})
-        ) 
+            f"Dron(id_dron='{self.id_dron}', modelo_aeronave='{self.modelo_aeronave}', "
+            f"categoria='{self.categoria}', disponible={self.disponible})"
+        )
 
     def actualizar_estado_disponibilidad(self, disponible: bool) -> None:
         # Agrego Funcionalidad. HU-03, UML, Responsabilidades no coinciden. Se agrega el atributo disponible (como se dice en el UML) para poder actualizar el estado de disponibilidad del dron.
