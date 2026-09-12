@@ -43,6 +43,7 @@ class Dron:
         """ Banderas Operacionales Para UH-03 y UH-04 """
         self.en_mision = False
         self.retornando_a_base = False
+        self.coordenadas_base = None
         
         """ Colaboradores de la Entidad Dron """
         self.telemetria = None  # Inicialmente no hay telemetría asignada
@@ -154,6 +155,10 @@ class Dron:
             # Lanzo una excepción si el dron ya está en el estado deseado
             raise EstadoDronDuplicadoError(self.id_dron, self.disponible)
         
+        if disponible and (self.en_mision or self.retornando_a_base):
+            motivo = "en misión activa" if self.en_mision else "retornando a base"
+            raise ActualizarEstadoDronError(self.id_dron, f"No se puede marcar como disponible: la aeronave se encuentra {motivo}")
+        
         # Si pasa las validaciones, actualizo el estado de disponibilidad del dron
         self.disponible = disponible
         
@@ -168,6 +173,11 @@ class Dron:
             distancia_recorrida = self.calculador.calcular_haversine(self.telemetria.coordenadas, nueva_telemetria.coordenadas) #type: ignore  
             if distancia_recorrida is not None:
                 self.kilometraje_total_km += distancia_recorrida # type: ignore (en el momento que se desarrolle la clase CalculadorGeodesico, se podrá eliminar el type: ignore)
+        
+        # Validar coherencia de identificador entre el dron y la telemetría
+        id_telemetria = getattr(nueva_telemetria, 'id_dron', None)
+        if id_telemetria is not None and id_telemetria != self.id_dron:
+            raise AsignarTelemetriaError(self.id_dron, f"Incoherencia: la telemetría pertenece al dron '{id_telemetria}', no a '{self.id_dron}'")
         
         # Actualizar la telemetría del dron con la nueva telemetría proporcionada
         self.telemetria = nueva_telemetria
@@ -195,13 +205,29 @@ class Dron:
         if not isinstance(coordenadas_base, tuple) or len(coordenadas_base) != 2:
             raise DestinoInvalidoError(self.id_dron, coordenadas_base)
             
+        self.coordenadas_base = coordenadas_base  # Guardamos la base de destino
         self.retornando_a_base = True
         self.en_mision = False
         self.disponible = False
 
     def finalizar_retorno_en_base(self) -> None:
+        # 1. Comprobar que realmente esté en proceso de retorno
+        if not self.retornando_a_base:
+            raise ActualizarEstadoDronError(self.id_dron, "Operación inválida: el dron no se encuentra en estado de retorno a base.")
+
+        # 2. Comprobar posición actual respecto a la base (tolerancia máxima de aterrizaje: 0.05 km = 50 metros)
+        if self.telemetria is not None and hasattr(self.telemetria, 'coordenadas') and self.coordenadas_base is not None:
+            distancia_a_base = self.calculador.calcular_haversine(self.telemetria.coordenadas, self.coordenadas_base) #type: ignore (en el momento que se desarrolle la clase CalculadorGeodesico, se podrá eliminar el type: ignore)
+            if distancia_a_base is not None and distancia_a_base > 0.05:
+                raise ActualizarEstadoDronError(
+                    self.id_dron, 
+                    f"Aterrizaje denegado: el dron se encuentra a {distancia_a_base:.2f} km de la base."
+                )
+
+        # Confirmación de aterrizaje en base
         self.retornando_a_base = False
         self.en_mision = False
         self.disponible = True
+        self.coordenadas_base = None
 
     
