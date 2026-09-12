@@ -18,7 +18,7 @@ class CoordenadaInvalidaError(Exception):
 
 
 
-# Las Siguientes excepciones son necesarias para poder realizar HU-03, implementó Juan Manuel Pava Higuita (HU-03):
+""" Las Siguientes excepciones son necesarias para poder realizar HU-03, implementó Juan Manuel Pava Higuita (HU-03) """
 class DronError(Exception):
     """ Excepcion base para errores relacionados con drones. """
     def __init__(self, id_dron: str, message: str) -> None:
@@ -42,5 +42,13 @@ class EstadoDronDuplicadoError(DronError):
         super().__init__(id_dron, message)
         self.estado_actual = estado_actual
 
+class AsignarTelemetriaError(DronError):
+    """Excepción cuando se intenta asignar un objeto que no es telemetría válida."""
+    def __init__(self, id_dron: str, objeto_invalido) -> None: #Objeto invalido es el objeto que no es del tipo TelemetriaDrone, por lo tanto puede ser Any, str, int, float, etc.
+        tipo_recibido = type(objeto_invalido).__name__ 
+        # type(objeto_invalido).__name__ devuelve el nombre del tipo de objeto recibido. Si se recibe un str, devuelve 'str', si se recibe un int, devuelve 'int', etc.
+        message = f"Se espera una instancia de TelemetriaDrone, sin embargo se recibió un objeto de tipo '{tipo_recibido}'."
+        super().__init__(id_dron, message)
+        self.objeto_invalido = objeto_invalido
 
-    
+
