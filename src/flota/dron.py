@@ -7,6 +7,7 @@ from src.telemetria.telemetria import TelemetriaDrone
 # Las siguientes importaciones de excepciones son necesarias para poder realizar HU-03
 from src.excepciones.errores import (
     ActualizarEstadoDronError,
+    AsignarTelemetriaError,
     EstadoDronDuplicadoError,
 )
 
@@ -28,7 +29,6 @@ class Dron:
 
     def actualizar_estado_disponibilidad(self, disponible: bool) -> None:
         # Agrego Funcionalidad. HU-03, UML, Responsabilidades no coinciden. Se agrega el atributo disponible (como se dice en el UML) para poder actualizar el estado de disponibilidad del dron.
-        
         if not isinstance(disponible, bool):
             # Lanzo una excepción si el valor proporcionado no es un booleano
             raise ActualizarEstadoDronError(self.id_dron, str(disponible))
@@ -41,8 +41,13 @@ class Dron:
         self.disponible = disponible
         
         
-    def asignar_telemetria(self, nueva_telemetria):
-        pass
+    def asignar_telemetria(self, nueva_telemetria) -> None:
+        # Validar que el objeto recibido sea estrictamente del tipo TelemetriaDrone
+        if not isinstance(nueva_telemetria, TelemetriaDrone):
+            raise AsignarTelemetriaError(self.id_dron, nueva_telemetria)
+            
+        # Si es válido, se asigna con éxito
+        self.telemetria = nueva_telemetria
 
     def calcular_distancia_a_destino(self, destino):
         pass
