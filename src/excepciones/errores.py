@@ -50,5 +50,18 @@ class AsignarTelemetriaError(DronError):
         message = f"Se espera una instancia de TelemetriaDrone, sin embargo se recibió un objeto de tipo '{tipo_recibido}'."
         super().__init__(id_dron, message)
         self.objeto_invalido = objeto_invalido
+        
+class TelemetriaNoAsignadaError(DronError):
+    """Excepción cuando se intenta calcular la distancia a un destino sin telemetría asignada."""
+    def __init__(self, id_dron: str) -> None:
+        message = "No se puede calcular la distancia: el dron no tiene telemetría asignada."
+        super().__init__(id_dron, message)
+        
+class DestinoInvalidoError(DronError):
+    """Excepción cuando se intenta calcular la distancia a un destino inválido."""
+    def __init__(self, id_dron: str, destino) -> None:
+        message = f"El destino proporcionado '{destino}' no es válido. Debe ser una tupla con latitud y longitud."
+        super().__init__(id_dron, message)
+        self.destino = destino
 
 
