@@ -110,37 +110,40 @@ class Dron:
             raise TypeError(f"La disponibilidad debe ser estrictamente booleana (True/False). Recibido: {type(self.disponible).__name__}")
         
         
-        def __str__(self) -> str:
-            # Determinamos el estado legible
-            if self.retornando_a_base:
-                estado_str = "RETORNANDO A BASE"
-            elif self.en_mision:
-                estado_str = "EN MISIÓN"
-            elif self.disponible:
-                estado_str = "DISPONIBLE"
-            else:
-                estado_str = "NO DISPONIBLE"
-            # Leemos telemetría de forma segura colaborando con el objeto telemetria
-            bateria_str = f"{self.telemetria.bateria:.1f}%" if self.telemetria else "Sin telemetría"
-            altitud_str = f"{self.telemetria.altitud:.1f} m" if self.telemetria else "N/A"
-            gps_str = f"{self.telemetria.coordenadas}" if self.telemetria else "Sin señal GPS"
-            return (
-                f"\n==================== FICHA DE DRON ====================\n"
-                f"  ID: {self.id_dron} | Modelo: {self.modelo_aeronave} | Cat: {self.categoria}\n"
-                f"  Estado Operacional : [{estado_str}]\n"
-                f"  Batería Restante   : {bateria_str} | Altitud: {altitud_str}\n"
-                f"  Ubicación GPS      : {gps_str}\n"
-                f"  Velocidad Crucero  : {self.velocidad_promedio_kmh:.1f} km/h\n"
-                f"  Odómetro Acumulado : {self.kilometraje_total_km:.2f} km\n"
-                f"========================================================"
-            )
-    
-        def __repr__(self) -> str:
-            return (
-                f"Dron(id_dron='{self.id_dron}', modelo='{self.modelo_aeronave}', "
-                f"categoria='{self.categoria}', disponible={self.disponible}, "
-                f"kilometraje_total_km={self.kilometraje_total_km})"
-            ) 
+    def __str__(self) -> str:
+        # Determinamos el estado legible
+        if self.retornando_a_base:
+            estado_str = "RETORNANDO A BASE"
+        elif self.en_mision:
+            estado_str = "EN MISIÓN"
+        elif self.disponible:
+            estado_str = "DISPONIBLE"
+        else:
+            estado_str = "NO DISPONIBLE"
+        # Leemos telemetría de forma segura colaborando con el objeto telemetria
+        bateria = getattr(self.telemetria, 'bateria', None)
+        bateria_str = f"{bateria:.1f}%" if bateria is not None else "Sin telemetría" # Type: ignore (en el momento que se desarrolle la clase TelemetriaDrone, se podrá eliminar el type: ignore)
+        altitud = getattr(self.telemetria, 'altitud', None)
+        altitud_str = f"{altitud:.1f} m" if altitud is not None else "N/A" # Type: ignore (en el momento que se desarrolle la clase TelemetriaDrone, se podrá eliminar el type: ignore)
+        gps = getattr(self.telemetria, 'coordenadas', None)
+        gps_str = f"{gps}" if gps is not None else "Sin señal GPS" # Type: ignore (en el momento que se desarrolle la clase TelemetriaDrone, se podrá eliminar el type: ignore)
+        return (
+            f"\n==================== FICHA DE DRON ====================\n"
+            f"  ID: {self.id_dron} | Modelo: {self.modelo_aeronave} | Cat: {self.categoria}\n"
+            f"  Estado Operacional : [{estado_str}]\n"
+            f"  Batería Restante   : {bateria_str} | Altitud: {altitud_str}\n"
+            f"  Ubicación GPS      : {gps_str}\n"
+            f"  Velocidad Crucero  : {self.velocidad_promedio_kmh:.1f} km/h\n"
+            f"  Odómetro Acumulado : {self.kilometraje_total_km:.2f} km\n"
+            f"========================================================"
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"Dron(id_dron='{self.id_dron}', modelo='{self.modelo_aeronave}', "
+            f"categoria='{self.categoria}', disponible={self.disponible}, "
+            f"kilometraje_total_km={self.kilometraje_total_km})"
+        ) 
 
     def actualizar_estado_disponibilidad(self, disponible: bool) -> None:
         # Agrego Funcionalidad. HU-03, UML, Responsabilidades no coinciden. Se agrega el atributo disponible (como se dice en el UML) para poder actualizar el estado de disponibilidad del dron.
@@ -161,9 +164,11 @@ class Dron:
         if not isinstance(nueva_telemetria, TelemetriaDrone):
             raise AsignarTelemetriaError(self.id_dron, nueva_telemetria)
         
-        if nueva_telemetria is not None:
+        if self.telemetria is not None and hasattr(self.telemetria, 'coordenadas') and hasattr(nueva_telemetria, 'coordenadas'):
+            # Calcular la distancia recorrida entre la telemetría actual y la nueva telemetría
             distancia_recorrida = self.calculador.calcular_haversine(self.telemetria.coordenadas, nueva_telemetria.coordenadas) #type: ignore  
-            self.kilometraje_total_km += distancia_recorrida # type: ignore (en el momento que se desarrolle la clase CalculadorGeodesico, se podrá eliminar el type: ignore)
+            if distancia_recorrida is not None:
+                self.kilometraje_total_km += distancia_recorrida # type: ignore (en el momento que se desarrolle la clase CalculadorGeodesico, se podrá eliminar el type: ignore)
         
         # Actualizar la telemetría del dron con la nueva telemetría proporcionada
         self.telemetria = nueva_telemetria
