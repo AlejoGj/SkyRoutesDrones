@@ -63,5 +63,13 @@ class DestinoInvalidoError(DronError):
         message = f"El destino proporcionado '{destino}' no es válido. Debe ser una tupla con latitud y longitud."
         super().__init__(id_dron, message)
         self.destino = destino
+        
+class CategoriaDronInvalidoError(DronError):
+    """Excepción cuando el modelo o categoría no pertenece a la flota permitida."""
+    def __init__(self, id_dron: str, categoria: str, categorias_permitidas: tuple) -> None:
+        message = f"La categoría '{categoria}' no es válida. Opciones permitidas: {categorias_permitidas}."
+        super().__init__(id_dron, message)
+        self.categoria = categoria
+        self.categorias_permitidas = categorias_permitidas
 
 
