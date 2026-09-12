@@ -33,7 +33,47 @@ Para garantizar un reparto exactamente equitativo (33.3% por integrante), el sis
 
 ---
 
-## 3. Historias de Usuario Detalladas y To-Do Lists
+## 3. Metodología de Trabajo
+
+---
+
+Para asegurar un desarrollo ordenado, colaborativo y con alta trazabilidad a lo largo del Sprint 1, el equipo adoptará el siguiente flujo de trabajo en Git:
+
+### 3.1 Creación de Ramas por Historia de Usuario (HU)
+* Cada integrante debe trabajar exclusivamente en una **rama independiente** creada a partir de la rama principal (`main` o `develop`).
+* **Regla estricta:** Queda prohibido hacer commits directos sobre la rama principal `main`.
+* **Nomenclatura estándar de ramas:**
+  * `feature/HU-01-telemetria-errores` (Alejandro)
+  * `feature/HU-02-calculador-geodesico` (Alejandro)
+  * `feature/HU-03-dron-modelo-base` (Juan Manuel)
+  * `feature/HU-04-retorno-base` (Juan Manuel)
+  * `feature/HU-05-usuarios-pedidos` (Valery)
+  * `feature/HU-06-centro-control` (Valery)
+
+### 3.2 Commits Atómicos y Testeo Previo
+* **Commits por funcionalidad:** Realizar commits pequeños, específicos y atómicos por cada método, clase o regla de negocio concluida, en lugar de un único commit masivo al final del sprint.
+* **Testeo sencillo previo:** Antes de hacer cada `git commit`, el desarrollador debe realizar una prueba rápida y aislada (por ejemplo en `main.py` o consola interactiva de Python) para certificar que el código compila y cumple lo esperado sin romper el sistema.
+* **Trazabilidad de errores:** Esta práctica asegura que, ante cualquier fallo o regresión, sea posible identificar con exactitud el commit responsable y revertirlo limpiamente en el historial de Git sin perder otro avance.
+* **Mensajes claros:** Redactar mensajes de commit autoexplicativos (ej. `feat(telemetria): validar coherencia entre altitud y estado de motores`).
+
+### 3.3 Creación de Pull Request (PR) con Descripción Relevante
+* Al completar todos los criterios de aceptación y el To-Do list de la HU, el desarrollador subirá su rama al repositorio remoto (`git push origin <nombre-rama>`) y creará un **Pull Request (PR)** apuntando hacia `main`.
+* **Contenido obligatorio del PR:** Se debe redactar una descripción relevante que detalle:
+  1. ¿Qué Historia de Usuario y requisitos funcionales atiende el PR?
+  2. ¿Qué clases, métodos o excepciones fueron agregados o modificados?
+  3. ¿Qué pruebas sencillas se ejecutaron para garantizar su correcto funcionamiento?
+
+### 3.4 Revisión y Aceptación Obligatoria del PR por parte de Alejandro
+* **Control de calidad centralizado:** Ningún colaborador puede fusionar (`merge`) su propio PR a la rama principal.
+* **Espera de aprobación:** Todo PR debe quedar en estado de espera hasta que **Alejandro García Jiménez** lo revise formalmente.
+* **Criterios de verificación del revisor:**
+  * Validar el cumplimiento estricto de **cero pilares de la POO** para esta entrega.
+  * Verificar la coherencia de nombres de atributos y métodos para que encajen con los demás módulos.
+  * Resolver dudas o solicitar ajustes en la revisión de código antes de aprobar y realizar el merge definitivo a `main`.
+
+---
+
+## 4. Historias de Usuario Detalladas y To-Do Lists
 
 ---
 
@@ -203,7 +243,7 @@ Para garantizar un reparto exactamente equitativo (33.3% por integrante), el sis
 
 ---
 
-## 4. Plan de Integración y Validación Conjunta (Fin del Sprint 1)
+## 5. Plan de Integración y Validación Conjunta (Fin del Sprint 1)
 
 Una vez que cada integrante termine su módulo individual, se realizará una sesión de integración en un archivo ejecutable (ej. `main.py` o `demo_sprint1.py`).
 
