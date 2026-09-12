@@ -140,9 +140,8 @@ class Dron:
 
     def __repr__(self) -> str:
         return (
-            f"Dron(id_dron='{self.id_dron}', modelo='{self.modelo_aeronave}', "
-            f"categoria='{self.categoria}', disponible={self.disponible}, "
-            f"kilometraje_total_km={self.kilometraje_total_km})"
+            f"Dron(id='{self.id_dron}', categoria='{self.categoria}', "
+            f"disponible={self.disponible})
         ) 
 
     def actualizar_estado_disponibilidad(self, disponible: bool) -> None:
