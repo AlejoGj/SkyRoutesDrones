@@ -16,7 +16,7 @@ from src.excepciones.errores import (
 
 class Dron:
     # Constante de clase compartida por todas las instancias (no gasta memoria por objeto)
-    CATEGORIAS_VALIDAS = ("ENTREGA_LIGERA", "CARGA_PESADA", "VIGILANCIA", "MAPEO", "INSPECCION", "RESCATE") 
+    CATEGORIAS_VALIDAS = ("ENTREGA_LIGERA", "CARGA_PESADA", "VIGILANCIA", "MAPEO_TOPOGRAFICO", "INSPECCION_INFRAESTRUCTURA", "BUSQUEDA_RESCATE")
     """
     Esta tupla en el SPRINT 1 se utiliza para validar que el modelo de aeronave del dron sea uno de los modelos permitidos.
     Cuando evolucionemos a SPRINT 2, se podrá eliminar esta constante, transladarse al centro_control y transformarse en un diccionario de modelos de aeronaves para validar el tipo de dron antes de crear la instancia de Dron. Esto permitirá que el dron pueda ser de cualquier modelo de aeronave, siempre y cuando esté registrado en el diccionario de modelos de aeronaves del centro_control.
