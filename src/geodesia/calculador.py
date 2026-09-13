@@ -8,12 +8,23 @@ class CalculadorGeodesico:
     def __init__(self):
         self.radio_tierra_km: float = 6371
 
-    
+    # se añade funcion no especificada en el documento
+    # esto buscando respetar el principio de responsabilidad unica
+    def _validar_coordenada(self, coordenada: tuple[float, float]) -> None:
+        """Valida que una coordenada cumpla con la Regla de Negocio 5 y dispara CoordenadaInvalidaError si no."""
+        if not isinstance(coordenada, tuple) or len(coordenada) != 2:
+            raise CoordenadaInvalidaError(coordenada)
+        lat, lon = coordenada
+        if not isinstance(lat, (float, int)) or not isinstance(lon, (float, int)):
+            raise CoordenadaInvalidaError(coordenada)
+        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
+            raise CoordenadaInvalidaError(coordenada)
 
 
     def calcular_haversine(self, origen: tuple[float, float], destino: tuple[float, float]) -> float:
         
-        
+        self._validar_coordenada(origen)
+        self._validar_coordenada(destino)
 
         # Desempaquetado de coordenadas (asumiendo que ingresan en grados decimales)
         lat1, lon1 = origen
