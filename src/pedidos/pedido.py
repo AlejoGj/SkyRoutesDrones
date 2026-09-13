@@ -72,11 +72,32 @@ class Pedido:
         self.estado = 'PENDIENTE'
         self.dron_asignado = None
 
-    def actualizar_estado(self, nuevo_estado):
-        pass
+    def actualizar_estado(self, nuevo_estado: str) -> None:
+        if not isinstance(nuevo_estado, str):
+            raise TypeError("El nuevo estado debe ser una cadena de texto. Por favor, intenta de nuevo")
 
-    def vincular_dron(self, dron):
-        pass
+        estado_limpio = nuevo_estado.strip().upper()
 
-    def __repr__(self):
-        pass
+        if estado_limpio not in self.estados_permitidos:
+            raise ValueError("El estado no es válido. Por favor, intenta de nuevo.")
+        self.estado = estado_limpio
+
+    def vincular_dron(self, dron: Dron) -> None:
+        if not isinstance(dron, Dron):
+            raise TypeError("El dron a vincular debe ser un objeto de la clase 'Dron', Por favor, intenta de nuevo.")
+        self.dron_asignado = dron
+
+    def __str__(self) -> str:
+        dron_info = self.dron_asignado.id_dron if self.dron_asignado else "Sin asignar"
+        return (
+            f"Pedido [{self.id_pedido}] - Cat: {self.categoria_requerida} - "
+            f"Estado: {self.estado} - Dron: {dron_info} - Destino: {self.coordenada_destino}"
+        )
+
+    def __repr__(self) -> str:
+        dron_id = f"'{self.dron_asignado.id_dron}'" if self.dron_asignado else "None"
+        return (
+            f"Pedido(id_pedido='{self.id_pedido}', usuario_solicitante='{self.usuario_solicitante.id_usuario}', "
+            f"categoria_requerida='{self.categoria_requerida}', estado='{self.estado}', dron_asignado={dron_id})"
+        )
+
