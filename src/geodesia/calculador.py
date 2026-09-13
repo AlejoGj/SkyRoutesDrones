@@ -5,20 +5,33 @@ import math
 from src.excepciones.errores import CoordenadaInvalidaError
 
 class CalculadorGeodesico:
+    # Límites geográficos oficiales del Valle de Aburrá:
+    # Latitud Norte: 5°58' a 6°30' -> [5.9667, 6.5000]
+    # Longitud Oeste: 75°43' a 75°21' -> [-75.7167, -75.3500]
+    LAT_MIN_ABURRA: float = 5.9667
+    LAT_MAX_ABURRA: float = 6.5000
+    LON_MIN_ABURRA: float = -75.7167
+    LON_MAX_ABURRA: float = -75.3500
+
     def __init__(self):
         self.radio_tierra_km: float = 6371
 
     # se añade funcion no especificada en el documento
     # esto buscando respetar el principio de responsabilidad unica
     def _validar_coordenada(self, coordenada: tuple[float, float]) -> None:
-        """Valida que una coordenada cumpla con la Regla de Negocio 5 y dispara CoordenadaInvalidaError si no."""
+        """Valida que una coordenada sea una tupla numérica y esté estrictamente dentro del Valle de Aburrá."""
         if not isinstance(coordenada, tuple) or len(coordenada) != 2:
             raise CoordenadaInvalidaError(coordenada)
         lat, lon = coordenada
         if not isinstance(lat, (float, int)) or not isinstance(lon, (float, int)):
             raise CoordenadaInvalidaError(coordenada)
-        if not (-90.0 <= lat <= 90.0 and -180.0 <= lon <= 180.0):
-            raise CoordenadaInvalidaError(coordenada)
+        if not (self.LAT_MIN_ABURRA <= lat <= self.LAT_MAX_ABURRA and self.LON_MIN_ABURRA <= lon <= self.LON_MAX_ABURRA):
+            raise CoordenadaInvalidaError(
+                coordenada,
+                f"Coordenadas '{coordenada}' fuera del área operativa del Valle de Aburrá. "
+                f"Deben estar delimitadas en latitud [{self.LAT_MIN_ABURRA}, {self.LAT_MAX_ABURRA}] (5°58' a 6°30' N) "
+                f"y longitud [{self.LON_MIN_ABURRA}, {self.LON_MAX_ABURRA}] (75°43' a 75°21' W)."
+            )
 
 
     def calcular_haversine(self, origen: tuple[float, float], destino: tuple[float, float]) -> float:
@@ -69,7 +82,7 @@ class CalculadorGeodesico:
         # Multiplicamos el ángulo central 'c' (en radianes) por el radio de la esfera (R).
         # Por definición geométrica, Arco = Radio * Ángulo. Al usar el radio en kilómetros, 
         # el resultado final se obtiene directamente en esa misma unidad métrica.   
-        return self.radioTierraKm * c
+        return self.radio_tierra_km * c
 
 
     def calcular_tiempo_vuelo_min(self, distancia_km: float, velocidad_km_h: float) -> float:
