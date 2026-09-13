@@ -2,25 +2,43 @@
 # Responsable: Alejandro García Jiménez
 
 class BateriaInvalidaError(Exception):
-    def __init__(self, bateria_invalida: int, message: str = "Batería inválida.") -> None:
+    """Excepción cuando el nivel de batería viola el rango permitido [0.0, 100.0]%."""
+    def __init__(self, bateria_invalida: float, message: str = None) -> None:
+        if message is None:
+            message = f"Nivel de batería '{bateria_invalida}%' inválido. Debe estar estrictamente en el rango [0.0, 100.0]%."
         super().__init__(message)
         self.bateria_invalida = bateria_invalida
 
 
 class AltitudInvalidaError(Exception):
-    def __init__(self, altitud_invalida: float, message: str = "Altitud inválida.") -> None:
+    """Excepción cuando la altitud de vuelo sobrepasa el techo aeronáutico o es negativa."""
+    def __init__(self, altitud_invalida: float, message: str = None) -> None:
+        if message is None:
+            message = f"Altitud '{altitud_invalida} m' inválida. Debe estar delimitada en el rango [0.0, 120.0] m."
         super().__init__(message)
         self.altitud_invalida = altitud_invalida
 
 
 class EstadoMotorInvalidoError(Exception):
-    def __init__(self, estado_motor_invalido: str, message: str = "Estado del motor inválido.") -> None:    
+    """Excepción cuando el estado de los motores no pertenece al catálogo o viola la coherencia de vuelo."""
+    def __init__(self, estado_motor_invalido: str, message: str = None) -> None:
+        if message is None:
+            message = (
+                f"Estado de motor '{estado_motor_invalido}' inválido o incoherente con la altitud. "
+                "Opciones permitidas: ('APAGADOS', 'STANDBY', 'EN_VUELO', 'EMERGENCIA')."
+            )
         super().__init__(message)
         self.estado_motor_invalido = estado_motor_invalido
 
 
 class CoordenadaInvalidaError(Exception):
-    def __init__(self, coordenada_invalida: tuple, message: str = "Coordenada inválida.") -> None:
+    """Excepción cuando las coordenadas geográficas son de formato incorrecto o salen de los límites geodésicos."""
+    def __init__(self, coordenada_invalida, message: str = None) -> None:
+        if message is None:
+            message = (
+                f"Coordenadas '{coordenada_invalida}' inválidas. Deben ser una tupla (latitud, longitud) "
+                "con latitud en [-90.0, 90.0] y longitud en [-180.0, 180.0]."
+            )
         super().__init__(message)
         self.coordenada_invalida = coordenada_invalida
 
