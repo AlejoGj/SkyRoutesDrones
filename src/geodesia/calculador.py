@@ -73,6 +73,7 @@ class CalculadorGeodesico:
 
 
     def calcular_tiempo_vuelo_min(self, distancia_km: float, velocidad_km_h: float) -> float:
-        return (distancia_km / velocidad_km_h) * 60
-
-    
+        # Evitar división por cero o velocidades no válidas
+        if velocidad_km_h <= 0.0 or distancia_km <= 0.0:
+            return 0.0
+        return (distancia_km / velocidad_km_h) * 60.0
