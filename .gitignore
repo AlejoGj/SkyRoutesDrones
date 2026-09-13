@@ -1,0 +1,40 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Entornos virtuales (Virtual Environments)
+venv/
+.venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Variables de entorno y secretos
+.env
+.env.*
+*.env
+
+# IDEs y editores de código
+.vscode/
+*.swp
+*.swo
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+
+# Distribución y empaquetado
+dist/
+build/
+*.egg-info/
+
+# Pruebas y cobertura
+.pytest_cache/
+.coverage
+htmlcov/
