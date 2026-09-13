@@ -90,4 +90,18 @@ class TelemetriaDrone:
             self.coordenadas = coordenadas
             self.latitud, self.longitud = self.coordenadas
 
+    def __str__(self) -> str:
+        return (
+            f"[Telemetría {self.id_dron}] Batería: {self.bateria:.1f}% | "
+            f"Altitud: {self.altitud:.1f} m | Motores: {self.estado_motores} | "
+            f"GPS: {self.coordenadas}"
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"TelemetriaDrone(id_dron='{self.id_dron}', bateria={self.bateria}, "
+            f"altitud={self.altitud}, estado_motores='{self.estado_motores}', "
+            f"coordenadas={self.coordenadas})"
+        )
+
         
