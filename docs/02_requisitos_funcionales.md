@@ -15,7 +15,7 @@
    - Si `altitud > 0.0 m`: `estado_motores` debe ser obligatoriamente `'EN_VUELO'`.
    - Si `altitud == 0.0 m` (en tierra): `estado_motores` no puede ser `'EN_VUELO'` (debe ser `'APAGADOS'`, `'STANDBY'` o `'EMERGENCIA'`).
    - El conjunto de estados válidos para los motores es estrictamente: `{'APAGADOS', 'STANDBY', 'EN_VUELO', 'EMERGENCIA'}`.
-5. **Coordenadas Geográficas (`coordenadas`):** Tupla de dos números reales `(latitud, longitud)` con latitud en `[-90.0, 90.0]` y longitud en `[-180.0, 180.0]`.
+5. **Coordenadas Geográficas (`coordenadas`):** Tupla de dos números reales `(latitud, longitud)` delimitada estrictamente por el área operativa del Valle de Aburrá (entre 5°58′ y 6°30′ de latitud norte `[5.9667, 6.5000]` y 75°21′ y 75°43′ de longitud oeste `[-75.7167, -75.3500]`).
 6. **Cálculo Geodésico:** La distancia a un destino geográfico se calcula mediante la fórmula de Haversine asumiendo un radio terrestre de 6371.0 km.
 7. **Validación de Usuario:** Todo usuario registrado en el sistema debe poseer un identificador único (`id_usuario`), un nombre no vacío y un rol válido dentro de la plataforma (ej. `{'CLIENTE', 'OPERADOR_VUELO', 'ADMINISTRADOR'}`).
 8. **Validación de Pedido:** Cada pedido gestionado por el sistema requiere un identificador único (`id_pedido`), un estado inicial válido (ej. `{'PENDIENTE', 'ASIGNADO', 'EN_TRANSITO', 'COMPLETADO', 'CANCELADO'}`), y debe estar asociado obligatoriamente a un usuario existente y a una de las 6 categorías de drones autorizadas.

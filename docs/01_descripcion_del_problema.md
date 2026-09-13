@@ -19,7 +19,7 @@ Para escalar sus operaciones en el Valle de Aburrá, se nos encomendó el desarr
 
 1. Gestión Inteligente de Pedidos: Una minibase de datos encargada de procesar las solicitudes de los clientes y asignar automáticamente el dron idóneo según la categoría y los requerimientos de la misión.
 
-2. Monitoreo de Telemetría y Mapa en Vivo: Un panel interactivo que consume datos geográficos reales de Medellín (latitudes 6.15 a 6.35 y longitudes -75.65 a -75.50) para ubicar cada aeronave sobre el mapa. Los datos se actualizan bajo demanda cada vez que el operador presiona el botón de refresco.
+2. Monitoreo de Telemetría y Mapa en Vivo: Un panel interactivo que consume datos geográficos reales del Valle de Aburrá (aproximadamente entre 5°58′ y 6°30′ de latitud norte [5.9667, 6.5000] y 75°21′ y 75°43′ de longitud oeste [-75.7167, -75.3500]) para ubicar cada aeronave sobre el mapa. Los datos se actualizan bajo demanda cada vez que el operador presiona el botón de refresco.
 
 Para garantizar operaciones seguras, el módulo valida en cada actualización que la batería, la altitud, el estado de los motores y las coordenadas cumplan con esstrictas reglas de negocio. Ante cualquier anomalía, el sistema interrumpe el proceso emitiendo excepciones específicas para alertar al operador.
 
