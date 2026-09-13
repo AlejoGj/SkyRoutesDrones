@@ -14,53 +14,80 @@ class TelemetriaDrone:
         self.id_dron = id_dron
         self.bateria = bateria
         self.altitud = altitud
-        self.estado_motores = estado_motores.upper()
+        self.estado_motores = estado_motores.upper().strip()
         self.coordenadas = coordenadas
-        self.validar_datos()
-        self.latitud, self.longitud = self.coordenadas
+        if self.validar_datos():
+            self.latitud, self.longitud = self.coordenadas
 
 
-    def validar_datos(self) -> None:
-        if not isinstance(self.id_dron, str) or not self.id_dron.strip():
+    def validar_datos(self, id_dron: str = None, bateria: float = None, altitud: float = None, estado_motores: str = None, coordenadas: tuple[float, float] = None) -> bool | None:
+        
+        if id_dron is None:
+            id_dron = self.id_dron
+
+        if bateria is None:
+            bateria = self.bateria
+
+        if altitud is None:
+            altitud = self.altitud
+
+        if estado_motores is None:
+            estado_motores = self.estado_motores
+
+        if coordenadas is None:
+            coordenadas = self.coordenadas
+
+        
+        if not isinstance(id_dron, str) or not id_dron.strip():
             raise ValueError("El ID del dron debe ser una cadena de texto no vacía.")
 
-        if not isinstance(self.bateria, (float, int)):
+        if not isinstance(bateria, (float, int)):
             raise ValueError("La batería debe ser un número.")
 
-        if not (0 <= self.bateria <= 100):
-            raise BateriaInvalidaError(self.bateria)
+        if not (0 <= bateria <= 100):
+            raise BateriaInvalidaError(bateria)
 
-        if not isinstance(self.altitud, (float, int)):
+        if not isinstance(altitud, (float, int)):
             raise ValueError("La altitud debe ser un número.")
 
-        if not (0 <= self.altitud <= 120):
-            raise AltitudInvalidaError(self.altitud)
+        if not (0 <= altitud <= 120):
+            raise AltitudInvalidaError(altitud)
 
-        if not isinstance(self.estado_motores, str) or not self.estado_motores.strip():
+        if not isinstance(estado_motores, str) or not estado_motores.strip():
             raise ValueError("El estado del motor debe ser una cadena de texto no vacía.")
 
-        if self.estado_motores not in ("APAGADOS", "STANDBY", "EN_VUELO", "EMERGENCIA"):
-            raise EstadoMotorInvalidoError(self.estado_motores)
+        estado_motores = estado_motores.upper().strip()
+
+        if estado_motores not in ("APAGADOS", "STANDBY", "EN_VUELO", "EMERGENCIA"):
+            raise EstadoMotorInvalidoError(estado_motores)
 
 
-        if not isinstance(self.coordenadas, tuple) or len(self.coordenadas) != 2:
-            raise CoordenadaInvalidaError(self.coordenadas)
+        if not isinstance(coordenadas, tuple) or len(coordenadas) != 2:
+            raise CoordenadaInvalidaError(coordenadas)
 
 
-        if not isinstance(self.coordenadas[0], (float, int)) or not isinstance(self.coordenadas[1], (float, int)):
-            raise CoordenadaInvalidaError(self.coordenadas)
-
-        
-        if not (-90 <= self.coordenadas[0] <= 90 and -180 <= self.coordenadas[1] <= 180):
-            raise CoordenadaInvalidaError(self.coordenadas)
+        if not isinstance(coordenadas[0], (float, int)) or not isinstance(coordenadas[1], (float, int)):
+            raise CoordenadaInvalidaError(coordenadas)
 
         
+        if not (-90 <= coordenadas[0] <= 90 and -180 <= coordenadas[1] <= 180):
+            raise CoordenadaInvalidaError(coordenadas)
 
-        if (self.altitud == 0 and self.estado_motores.upper() == "EN_VUELO") or (self.altitud > 0 and self.estado_motores.upper() != "EN_VUELO"):
-            raise EstadoMotorInvalidoError(self.estado_motores)
+        
+        if (altitud == 0 and estado_motores == "EN_VUELO") or (altitud > 0 and estado_motores != "EN_VUELO"):
+            raise EstadoMotorInvalidoError(estado_motores)
+
+        return True
 
         
 
     def actualizar_trama(self, bateria: float, altitud: float, estado_motores: str, coordenadas: tuple[float, float]) -> None:
-        pass    
+
+        if self.validar_datos(bateria = bateria, altitud = altitud, estado_motores = estado_motores, coordenadas = coordenadas):
+            self.bateria = bateria
+            self.altitud = altitud
+            self.estado_motores = estado_motores.upper().strip()
+            self.coordenadas = coordenadas
+            self.latitud, self.longitud = self.coordenadas
+
         
