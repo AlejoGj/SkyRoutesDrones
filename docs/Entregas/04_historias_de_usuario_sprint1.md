@@ -91,7 +91,7 @@ Para asegurar un desarrollo ordenado, colaborativo y con alta trazabilidad a lo 
 2. Si `altitud` no está en `[0.0, 120.0]`, se lanza `AltitudInvalidaError`.
 3. Si `altitud > 0.0` y `estado_motores != 'EN_VUELO'`, se lanza `EstadoMotorInvalidoError`.
 4. Si `altitud == 0.0` y `estado_motores == 'EN_VUELO'`, se lanza `EstadoMotorInvalidoError`.
-5. Si `coordenadas` no están en latitud `[-90.0, 90.0]` o longitud `[-180.0, 180.0]`, se lanza `CoordenadaInvalidaError`.
+5. Si `coordenadas` no están dentro de los límites del Valle de Aburrá (latitud `[5.9667, 6.5000]` o longitud `[-75.7167, -75.3500]`), se lanza `CoordenadaInvalidaError`.
 
 ##### To-Do List:
 - [ ] Crear el archivo de excepciones con las clases: `BateriaInvalidaError`, `AltitudInvalidaError`, `EstadoMotorInvalidoError`, `CoordenadaInvalidaError` (heredando únicamente de `Exception` nativa de Python).

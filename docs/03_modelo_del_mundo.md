@@ -143,8 +143,8 @@ Para que el sistema funcione de manera coordinada y ordenada, cada clase del mod
   * `bateria: float`: Porcentaje de carga restante de la batería (`[0.0, 100.0]%`).
   * `altitud: float`: Altura de vuelo sobre el nivel del suelo en metros (`[0.0, 120.0] m`).
   * `estadoMotores: str`: Estado de la planta motriz (`'APAGADOS'`, `'STANDBY'`, `'EN_VUELO'`, `'EMERGENCIA'`).
-  * `latitud: float`: Coordenada de latitud en grados decimales (`[-90.0, 90.0]`).
-  * `longitud: float`: Coordenada de longitud en grados decimales (`[-180.0, 180.0]`).
+  * `latitud: float`: Coordenada de latitud en grados decimales acotada al Valle de Aburrá (`[5.9667, 6.5000]`, 5°58′ a 6°30′ N).
+  * `longitud: float`: Coordenada de longitud en grados decimales acotada al Valle de Aburrá (`[-75.7167, -75.3500]`, 75°43′ a 75°21′ W).
 * **Responsabilidades:**
   * Empaquetar y custodiar los datos sensoriales transmitidos por la aeronave en cada instante.
   * Validar estrictamente las reglas de dominio físico y regulatorio antes de aceptar cualquier valor.
