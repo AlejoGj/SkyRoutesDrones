@@ -1,12 +1,6 @@
 # Script de pruebas y demostracion del modulo de telemetria
 # Historia de Usuario: HU-01 (Alejandro Garcia Jimenez)
 
-import sys
-from pathlib import Path
-
-# Garantizar resolucion del modulo src ejecutando directamente o como modulo
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 # 1. Entidad principal bajo prueba
 from src.telemetria.telemetria import TelemetriaDrone
 

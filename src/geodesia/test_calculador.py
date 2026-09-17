@@ -3,12 +3,6 @@
 # Contexto geografico: Operaciones de aeronaves sobre el Valle de Aburra
 # Limites geograficos del Valle: 5°58' N a 6°30' N (5.9667° a 6.5000°) y 75°43' W a 75°21' W (-75.7167° a -75.3500°)
 
-import sys
-from pathlib import Path
-
-# Garantizar resolucion del modulo src ejecutando directamente o como modulo
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 from src.geodesia.calculador import CalculadorGeodesico
 from src.excepciones.errores import CoordenadaInvalidaError
 
