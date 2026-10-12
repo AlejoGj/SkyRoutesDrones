@@ -28,8 +28,30 @@ class SistemaCentroControl:
         return dron
 
 
-    def registrar_pedido(self, pedido):
-        pass
+    def registrar_usuario(self, usuario: Usuario) -> Usuario:
+        if not isinstance(usuario, Usuario):
+            raise TypeError("El parámetro debe ser un objeto válido de la clase Usuario.")
+
+        for u in self.usuarios_registrados:
+            if u.id_usuario == usuario.id_usuario:
+                raise ValueError(f"El usuario con ID '{usuario.id_usuario}' ya está registrado.")
+
+        self.usuarios_registrados.append(usuario)
+        print(f"Usuario '{usuario.nombre}' (Rol: {usuario.rol}) registrado exitosamente.")
+        return usuario
+
+    def registrar_pedido(self, pedido: Pedido) -> Pedido:
+        if not isinstance(pedido, Pedido):
+            raise TypeError("El parámetro debe ser un objeto válido de la clase Pedido!")
+
+        for p in self.pedidos:
+            if p.id_pedido == pedido.id_pedido:
+                raise ValueError(f"El pedido con ID '{pedido.id_pedido}' ya está registrado!")
+
+        self.pedidos.append(pedido)
+        print(f"Pedido '{pedido.id_pedido}' (Categoría: {pedido.categoria_requerida}) registrado exitosamente.")
+        return pedido
+
 
     def asignar_dron_a_pedido(self, id_pedido):
         pass
