@@ -100,8 +100,37 @@ class SistemaCentroControl:
         print(f"No hay drones disponibles de la categoría '{pedido_encontrado.categoria_requerida}' en este momento.")
         return False
 
-    def gestionar_retorno_a_base(self, id_dron):
-        pass
+    def gestionar_retorno_a_base(self, id_dron: str) -> bool:
+        dron_encontrado = None
+        for dron in self.flota_drones:
+            if dron.id_dron == id_dron.strip():
+                dron_encontrado = dron
+                break
+
+        if not dron_encontrado:
+            print(f"No se encontró ningún dron con ID '{id_dron}'!")
+            return False
+
+        if not dron_encontrado.en_mision:
+            print(f"El dron con ID '{id_dron}' no está actualmente en misión entonces no se puede retornar a la base!")
+            return False
+
+        try:
+            dron_encontrado.iniciar_retorno_base(self.coordenadas_base)
+            print(f"Dron {id_dron} ha iniciado el retorno a la base con éxito!")
+
+            self.generar_log(
+                evento="RETORNO_A_BASE",
+                id_dron=id_dron,
+                id_pedido="N/A",
+                detalles=f"Dron {id_dron} en transito de retorno hacia coordenadas base {self.coordenadas_base}."
+            )
+            return True
+
+        except Exception as e:
+            print(f"Error al iniciar el retorno a la base para el dron {id_dron}: {e}")
+            return False
+
 
     def generar_log(self, evento: str, id_dron: str = None, id_pedido: str = None, detalles: str = "", tipo_evento: str = None) -> LogOperacion:
         tipo = evento or tipo_evento or "EVENTO_GENERAL"
