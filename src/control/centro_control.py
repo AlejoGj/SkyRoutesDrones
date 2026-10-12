@@ -150,3 +150,34 @@ class SistemaCentroControl:
         self.historial_logs.append(nuevo_log)
         return nuevo_log
 
+    def refrescar_datos_flota(self) -> int:
+        drones_actualizados = len(self.flota_drones)
+        self.generar_log(
+            evento="REFRESCO_TELEMETRIA",
+            detalles=f"Telemetria y estado de {drones_actualizados} aeronave(s) de la flota actualizados bajo demanda."
+        )
+        print(f"Telemetría y estado de {drones_actualizados} aeronave(s) en la flota actualizados con éxito.")
+        return drones_actualizados
+
+    def __str__(self) -> str:
+        linea = "=" * 55
+        return (
+            f"\n{linea}\n"
+            f" TORRE DE CONTROL SKYROUTE - CENTRO DE OPERACIONES\n"
+            f" Base Central: {self.coordenadas_base}\n"
+            f" Flota Activa: {len(self.flota_drones)} aeronaves\n"
+            f" Drones Disponibles: {len(self.obtener_drones_disponibles())}\n"
+            f" Usuarios Registrados: {len(self.usuarios_registrados)}\n"
+            f" Pedidos Gestionados: {len(self.pedidos)}\n"
+            f" Registros de Auditoría: {len(self.historial_logs)}\n"
+            f"{linea}\n"
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"SistemaCentroControl(flota={len(self.flota_drones)}, "
+            f"usuarios={len(self.usuarios_registrados)}, pedidos={len(self.pedidos)}, "
+            f"base={self.coordenadas_base})"
+        )
+
+
