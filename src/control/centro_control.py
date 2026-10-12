@@ -1,10 +1,12 @@
 # Módulo orquestador del centro de control de operaciones
 # Responsable: Valery Arboleda Ardila
 
+from datetime import datetime
 from src.usuarios.usuario import Usuario
 from src.pedidos.pedido import Pedido
 from src.flota.dron import Dron
 from src.control.log_operacion import LogOperacion
+
 
 
 class SistemaCentroControl:
@@ -53,11 +55,69 @@ class SistemaCentroControl:
         return pedido
 
 
-    def asignar_dron_a_pedido(self, id_pedido):
-        pass
+    def obtener_drones_disponibles(self) -> list[Dron]:
+        drones_desocupados = []
+        for dron in self.flota_drones:
+            if dron.disponible:
+                drones_desocupados.append(dron)
+        return drones_desocupados
+
+    def asignar_dron_a_pedido(self, id_pedido: str) -> bool:
+        pedido_encontrado = None
+        for p in self.pedidos:
+            if p.id_pedido == id_pedido.strip():
+                pedido_encontrado = p
+                break
+
+        if not pedido_encontrado:
+            print(f"No se encontró ningún pedido con ID '{id_pedido}'!")
+            return False
+
+        if pedido_encontrado.estado != "PENDIENTE":
+            print(f"El pedido con ID '{id_pedido}' no está en estado 'PENDIENTE'!")
+            return False
+
+        drones_desocupados = self.obtener_drones_disponibles()
+
+        for dron in drones_desocupados:
+            if dron.categoria == pedido_encontrado.categoria_requerida:
+                pedido_encontrado.vincular_dron(dron)
+                pedido_encontrado.actualizar_estado('ASIGNADO')
+
+                dron.disponible = False
+                dron.en_mision = True
+
+                self.generar_log(
+                    evento="ASIGNACION_DRON",
+                    id_dron=dron.id_dron,
+                    id_pedido=pedido_encontrado.id_pedido,
+                    detalles=f"Asignacion exitosa! Dron {dron.id_dron} ({dron.categoria}) enlazado al pedido {pedido_encontrado.id_pedido}."
+                )
+
+                print(f"El dron {dron.id_dron} ha sido asignado al pedido {pedido_encontrado.id_pedido} exitosamente.")
+                return True
+
+        print(f"No hay drones disponibles de la categoría '{pedido_encontrado.categoria_requerida}' en este momento.")
+        return False
 
     def gestionar_retorno_a_base(self, id_dron):
         pass
 
-    def generar_log(self, tipo_evento, id_dron=None, id_pedido=None, detalles=""):
-        pass
+    def generar_log(self, evento: str, id_dron: str = None, id_pedido: str = None, detalles: str = "", tipo_evento: str = None) -> LogOperacion:
+        tipo = evento or tipo_evento or "EVENTO_GENERAL"
+        fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        id_log_generado = f"LOG-{datetime.now().strftime('%Y%m%d%H%M%S')}-{len(self.historial_logs) + 1}"
+        texto_detalles = detalles if detalles else f"Registro de sistema: {tipo} procesado."
+
+        nuevo_log = LogOperacion(
+            id_log=id_log_generado,
+            fecha_hora=fecha_actual,
+            tipo_evento=tipo,
+            id_dron=id_dron,
+            id_pedido=id_pedido,
+            detalles=texto_detalles
+        )
+
+        self.historial_logs.append(nuevo_log)
+        return nuevo_log
+

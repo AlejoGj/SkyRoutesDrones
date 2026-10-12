@@ -71,6 +71,7 @@ class Pedido:
         # ESTADO Y DRON ASIGNADO
         self.estado = 'PENDIENTE'
         self.dron_asignado = None
+        self.categoria = self.categoria_requerida
 
     def actualizar_estado(self, nuevo_estado: str) -> None:
         if not isinstance(nuevo_estado, str):
@@ -86,6 +87,9 @@ class Pedido:
         if not isinstance(dron, Dron):
             raise TypeError("El dron a vincular debe ser un objeto de la clase 'Dron', Por favor, intenta de nuevo.")
         self.dron_asignado = dron
+
+    asignar_dron = vincular_dron
+
 
     def __str__(self) -> str:
         dron_info = self.dron_asignado.id_dron if self.dron_asignado else "Sin asignar"
