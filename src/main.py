@@ -1,9 +1,3 @@
-import sys
-from pathlib import Path
-
-# Garantizar resolucion de modulo src ejecutando directamente o como modulo
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
-
 from src.excepciones.errores import (
     BateriaInvalidaError,
     AltitudInvalidaError,
