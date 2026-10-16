@@ -29,7 +29,8 @@ SkyRoute-Drones-POO/
 │   ├── 02_requisitos_funcionales.md  # Requisitos Funcionales y Reglas de Negocio
 │   ├── 03_modelo_del_mundo.md        # Entidades y Diagrama de Clases UML
 │   └── Entregas/
-│       └── 04_historias_de_usuario_sprint1.md # Historias de Usuario, Metodología y Sprint 1
+│       ├── 04_historias_de_usuario_sprint1.md # Historias de Usuario, Metodología y Sprint 1
+│       └── 05_historias_de_usuario_sprint2.md # Historias de Usuario, Herencia, Abstracción y Polimorfismo (Sprint 2)
 │
 ├── src/                              # Código fuente del sistema
 │   ├── README.md                     # Guía de arquitectura y uso de paquetes
@@ -47,3 +48,4 @@ El análisis formal del problema, los requisitos funcionales, las reglas de nego
 * **[02_requisitos_funcionales.md](docs/02_requisitos_funcionales.md):** Requisitos RF-01 a RF-10 y restricciones de dominio.
 * **[03_modelo_del_mundo.md](docs/03_modelo_del_mundo.md):** Entidades, asignación de responsabilidades y diagrama UML en Mermaid.
 * **[04_historias_de_usuario_sprint1.md](docs/Entregas/04_historias_de_usuario_sprint1.md):** Historias de usuario, metodología de trabajo Git, reparto equitativo y Sprint 1 (sin pilares de POO).
+* **[05_historias_de_usuario_sprint2.md](docs/Entregas/05_historias_de_usuario_sprint2.md):** Historias de usuario para el Sprint 2: herencia de las 6 subclases de drones, polimorfismo y clases abstractas (sin encapsulamiento).
