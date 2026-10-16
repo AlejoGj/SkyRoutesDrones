@@ -63,6 +63,14 @@ class SistemaCentroControl:
         return drones_desocupados
 
     def asignar_dron_a_pedido(self, id_pedido: str) -> bool:
+        """
+        Cruza información para buscar el primer dron disponible compatible
+        con la categoría solicitada por el pedido y realiza la asignación (RF-08).
+        """
+        if not isinstance(id_pedido, str) or not id_pedido.strip():
+            print("El ID del pedido debe ser una cadena de texto no vacía.")
+            return False
+
         pedido_encontrado = None
         for p in self.pedidos:
             if p.id_pedido == id_pedido.strip():
@@ -101,6 +109,13 @@ class SistemaCentroControl:
         return False
 
     def gestionar_retorno_a_base(self, id_dron: str) -> bool:
+        """
+        Ordena el regreso obligatorio de una aeronave a la base central de la empresa (RF-09).
+        """
+        if not isinstance(id_dron, str) or not id_dron.strip():
+            print("El ID del dron debe ser una cadena de texto no vacía.")
+            return False
+
         dron_encontrado = None
         for dron in self.flota_drones:
             if dron.id_dron == id_dron.strip():
