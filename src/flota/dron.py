@@ -1,6 +1,5 @@
 # Módulo de la entidad Dron y gestión de estados de vuelo
 # Responsable: Juan Manuel Pava Higuita
-
 from src.geodesia.calculador import CalculadorGeodesico
 from src.telemetria.telemetria import TelemetriaDrone
 
@@ -39,6 +38,8 @@ class Dron:
         self.velocidad_promedio_kmh = velocidad_promedio_kmh # Se inicializa la velocidad promedio del dron, si no se pasa un valor, se inicializa en 60.0 km/h
         self.kilometraje_total_km = kilometraje_total_km # Se inicializa el kilomertraje, si no se pasa un valor, se inicializa en 0.0
         self.disponible = disponible # Se inicializa el estado de disponibilidad del dron, si no se pasa un valor, se inicializa en True
+        self._historial_telemetria: list[str] = [] # Bitácora interna privada (mutable solo por la clase)
+
         
         """ Banderas Operacionales Para UH-03 y UH-04 """
         self.en_mision = False
@@ -121,13 +122,15 @@ class Dron:
             estado_str = "DISPONIBLE"
         else:
             estado_str = "NO DISPONIBLE"
-        # Leemos telemetría de forma segura colaborando con el objeto telemetria
-        bateria = getattr(self.telemetria, 'bateria', None)
-        bateria_str = f"{bateria:.1f}%" if bateria is not None else "Sin telemetría" # Type: ignore (en el momento que se desarrolle la clase TelemetriaDrone, se podrá eliminar el type: ignore)
-        altitud = getattr(self.telemetria, 'altitud', None)
-        altitud_str = f"{altitud:.1f} m" if altitud is not None else "N/A" # Type: ignore (en el momento que se desarrolle la clase TelemetriaDrone, se podrá eliminar el type: ignore)
-        gps = getattr(self.telemetria, 'coordenadas', None)
-        gps_str = f"{gps}" if gps is not None else "Sin señal GPS" # Type: ignore (en el momento que se desarrolle la clase TelemetriaDrone, se podrá eliminar el type: ignore)
+        # Leemos telemetría colaborando directamente con el objeto TelemetriaDrone
+        if self.telemetria is not None:
+            bateria_str = f"{self.telemetria.bateria:.1f}%"
+            altitud_str = f"{self.telemetria.altitud:.1f} m"
+            gps_str = f"{self.telemetria.coordenadas}"
+        else:
+            bateria_str = "Sin telemetría"
+            altitud_str = "N/A"
+            gps_str = "Sin señal GPS"
         return (
             f"\n==================== FICHA DE DRON ====================\n"
             f"  ID: {self.id_dron} | Modelo: {self.modelo_aeronave} | Cat: {self.categoria}\n"
@@ -163,24 +166,82 @@ class Dron:
         self.disponible = disponible
         
         
-    def asignar_telemetria(self, nueva_telemetria) -> None:
+    def asignar_telemetria(self, nueva_telemetria: TelemetriaDrone) -> None:
         # Validar que el objeto recibido sea estrictamente del tipo TelemetriaDrone
         if not isinstance(nueva_telemetria, TelemetriaDrone):
             raise AsignarTelemetriaError(self.id_dron, nueva_telemetria)
         
-        if self.telemetria is not None and hasattr(self.telemetria, 'coordenadas') and hasattr(nueva_telemetria, 'coordenadas'):
-            # Calcular la distancia recorrida entre la telemetría actual y la nueva telemetría
-            distancia_recorrida = self.calculador.calcular_haversine(self.telemetria.coordenadas, nueva_telemetria.coordenadas) #type: ignore  
-            if distancia_recorrida is not None:
-                self.kilometraje_total_km += distancia_recorrida # type: ignore (en el momento que se desarrolle la clase CalculadorGeodesico, se podrá eliminar el type: ignore)
-        
         # Validar coherencia de identificador entre el dron y la telemetría
-        id_telemetria = getattr(nueva_telemetria, 'id_dron', None)
-        if id_telemetria is not None and id_telemetria != self.id_dron:
-            raise AsignarTelemetriaError(self.id_dron, f"Incoherencia: la telemetría pertenece al dron '{id_telemetria}', no a '{self.id_dron}'")
+        if nueva_telemetria.id_dron != self.id_dron:
+            raise AsignarTelemetriaError(self.id_dron, f"Incoherencia: la telemetría pertenece al dron '{nueva_telemetria.id_dron}', no a '{self.id_dron}'")
         
-        # Actualizar la telemetría del dron con la nueva telemetría proporcionada
+        # Si ya había una telemetría previa, calcular la distancia recorrida y acumular kilometraje
+        if self.telemetria is not None:
+            distancia_recorrida = self.calculador.calcular_haversine(self.telemetria.coordenadas, nueva_telemetria.coordenadas)
+            if distancia_recorrida is not None:
+                self.kilometraje_total_km += distancia_recorrida
+        
+        # Asignar la telemetría inicial al dron
         self.telemetria = nueva_telemetria
+
+        # Registrar la captura técnica inicial en el log de telemetría (inmutable)
+        self._historial_telemetria.append(repr(self.telemetria))
+
+    def actualizar_telemetria(
+        self,
+        bateria_o_telemetria: float | TelemetriaDrone,
+        altitud: float = None,
+        estado_motores: str = None,
+        coordenadas: tuple[float, float] = None
+    ) -> None:
+        """
+        Actualiza los datos de telemetría del dron in-place reutilizando la instancia existente
+        de TelemetriaDrone mediante su método actualizar_trama(...).
+        
+        Soporta recibir los parámetros individuales (bateria, altitud, estado_motores, coordenadas)
+        o directamente una nueva instancia de TelemetriaDrone.
+        """
+        if self.telemetria is None:
+            raise TelemetriaNoAsignadaError(self.id_dron)
+        
+        if isinstance(bateria_o_telemetria, TelemetriaDrone):
+            if bateria_o_telemetria.id_dron != self.id_dron:
+                raise AsignarTelemetriaError(self.id_dron, f"Incoherencia: la telemetría pertenece al dron '{bateria_o_telemetria.id_dron}', no a '{self.id_dron}'")
+            nueva_bateria = bateria_o_telemetria.bateria
+            nueva_altitud = bateria_o_telemetria.altitud
+            nuevo_estado_motores = bateria_o_telemetria.estado_motores
+            nuevas_coordenadas = bateria_o_telemetria.coordenadas
+        else:
+            nueva_bateria = bateria_o_telemetria
+            nueva_altitud = altitud
+            nuevo_estado_motores = estado_motores
+            nuevas_coordenadas = coordenadas
+
+        # Calcular kilometraje acumulado si hubo desplazamiento antes de mutar las coordenadas
+        if nuevas_coordenadas is not None:
+            distancia_recorrida = self.calculador.calcular_haversine(self.telemetria.coordenadas, nuevas_coordenadas)
+            if distancia_recorrida is not None:
+                self.kilometraje_total_km += distancia_recorrida
+
+        # Reutilizar el objeto de telemetría llamando a su método especializado actualizar_trama
+        self.telemetria.actualizar_trama(
+            bateria=nueva_bateria,
+            altitud=nueva_altitud,
+            estado_motores=nuevo_estado_motores,
+            coordenadas=nuevas_coordenadas
+        )
+
+        # Registrar la captura técnica inmutable en el historial
+        self._historial_telemetria.append(repr(self.telemetria))
+
+    @property
+    def historial_telemetria(self) -> tuple[str, ...]:
+        """
+        Bitácora inmutable de capturas técnicas de telemetría del dron.
+        Retorna una tupla congelada para impedir alteraciones, eliminaciones o vaciados externos.
+        """
+        return tuple(self._historial_telemetria)
+
 
     def calcular_distancia_a_destino(self, destino: tuple) -> float: #type: ignore
         # Calcula la distancia entre el dron y un destino.
@@ -191,7 +252,7 @@ class Dron:
         if not isinstance(destino, tuple) or len(destino) != 2:
             raise DestinoInvalidoError(self.id_dron, destino)
         
-        return self.calculador.calcular_haversine(self.telemetria.coordenadas, destino) #type: ignore (en el momento que se desarrolle la clase CalculadorGeodesico, se podrá eliminar el type: ignore)
+        return self.calculador.calcular_haversine(self.telemetria.coordenadas, destino)
         # Se utiliza el método calcular_haversine de la clase CalculadorGeodesico para obtener la distancia en kilómetros entre las coordenadas actuales del dron y el destino proporcionado.
         # Se asume que self.telemetria.coordenadas es una tupla de la forma (latitud, longitud) y que destino también es una tupla de la misma forma.
     
@@ -216,8 +277,8 @@ class Dron:
             raise ActualizarEstadoDronError(self.id_dron, "Operación inválida: el dron no se encuentra en estado de retorno a base.")
 
         # 2. Comprobar posición actual respecto a la base (tolerancia máxima de aterrizaje: 0.05 km = 50 metros)
-        if self.telemetria is not None and hasattr(self.telemetria, 'coordenadas') and self.coordenadas_base is not None:
-            distancia_a_base = self.calculador.calcular_haversine(self.telemetria.coordenadas, self.coordenadas_base) #type: ignore (en el momento que se desarrolle la clase CalculadorGeodesico, se podrá eliminar el type: ignore)
+        if self.telemetria is not None and self.coordenadas_base is not None:
+            distancia_a_base = self.calculador.calcular_haversine(self.telemetria.coordenadas, self.coordenadas_base)
             if distancia_a_base is not None and distancia_a_base > 0.05:
                 raise ActualizarEstadoDronError(
                     self.id_dron, 
@@ -229,5 +290,3 @@ class Dron:
         self.en_mision = False
         self.disponible = True
         self.coordenadas_base = None
-
-    
