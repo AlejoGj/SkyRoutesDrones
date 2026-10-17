@@ -1,40 +1,46 @@
 # Módulo de la entidad Dron y gestión de estados de vuelo
-# Responsable: Juan Manuel Pava Higuita
+# Responsable: Juan Manuel Pava Higuita (Sprint 1) / Alejandro García Jiménez (Sprint 2 - HU-07)
+
+# 1. from __future__ import annotations (PEP 563):
+# Hace que las anotaciones de tipo (Type Hints) se interpreten como cadenas de texto diferidas
+# en tiempo de ejecución. Permite referenciar clases en firmas de métodos sin forzar su carga inmediata en memoria.
+from __future__ import annotations
+
+# 2. from typing import TYPE_CHECKING:
+# 'TYPE_CHECKING' es una bandera de Python:
+# - En ejecución real del programa vale False (evita ejecutar imports dentro del 'if').
+# - Para el editor / IDE (autocompletado y tipado estático) vale True.
+# SOLUCIÓN A IMPORTACIÓN CIRCULAR: 'pedido.py' importa a 'Dron', y 'dron.py' necesita a 'Pedido'.
+# Gracias a este patrón, el ciclo se rompe completamente y el programa corre sin errores.
+from typing import TYPE_CHECKING
+from abc import ABC, abstractmethod
 from src.geodesia.calculador import CalculadorGeodesico
 from src.telemetria.telemetria import TelemetriaDrone
+
+if TYPE_CHECKING:
+    # Esta importación solo existe para que el IDE reconozca el tipo en: 'ejecutar_mision(self, pedido: Pedido)'
+    from src.pedidos.pedido import Pedido
 
 # Las siguientes importaciones de excepciones son necesarias para poder realizar HU-03
 from src.excepciones.errores import (
     ActualizarEstadoDronError,
     AsignarTelemetriaError,
-    CategoriaDronInvalidoError,
     DestinoInvalidoError,
     EstadoDronDuplicadoError,
     TelemetriaNoAsignadaError,
 )
 
-class Dron:
-    # Constante de clase compartida por todas las instancias (no gasta memoria por objeto)
-    CATEGORIAS_VALIDAS = ("ENTREGA_LIGERA", "CARGA_PESADA", "VIGILANCIA", "MAPEO_TOPOGRAFICO", "INSPECCION_INFRAESTRUCTURA", "BUSQUEDA_RESCATE")
-    """
-    Esta tupla en el SPRINT 1 se utiliza para validar que el modelo de aeronave del dron sea uno de los modelos permitidos.
-    Cuando evolucionemos a SPRINT 2, se podrá eliminar esta constante, transladarse al centro_control y transformarse en un diccionario de modelos de aeronaves para validar el tipo de dron antes de crear la instancia de Dron. Esto permitirá que el dron pueda ser de cualquier modelo de aeronave, siempre y cuando esté registrado en el diccionario de modelos de aeronaves del centro_control.
-    
-    Ejemplo:
-    
-    FABRICA_DRONES = {
-        "ENTREGA_LIGERA": DronEntregaLigera,
-        "CARGA_PESADA": DronCargaPesada,
-        "VIGILANCIA": DronVigilancia,
-        "MAPEO": DronMapeo,
-        "INSPECCION": DronInspeccion,
-        "RESCATE": DronRescate
-    }
-    """
-    def __init__(self, id_dron: str, modelo_aeronave: str, categoria: str, velocidad_promedio_kmh: float = 60.0, kilometraje_total_km: float = 0.0, disponible: bool = True)-> None:
+class Dron(ABC):
+    def __init__(
+        self,
+        id_dron: str,
+        modelo_aeronave: str,
+        velocidad_promedio_kmh: float = 60.0,
+        kilometraje_total_km: float = 0.0,
+        disponible: bool = True,
+    ) -> None:
         self.id_dron = id_dron 
         self.modelo_aeronave = modelo_aeronave
-        self.categoria = categoria # Se inicializa la categoría del dron. La categoría debe ser una de las categorías válidas definidas en la constante CATEGORIAS_VALIDAS. Este atributo se desechará en el SPRINT 2, ya que esta será la clase base de la que heredarán las subclases de drones, y cada subclase representará un modelo de aeronave específico, por lo que no será necesario almacenar la categoría en el objeto Dron.
         self.velocidad_promedio_kmh = velocidad_promedio_kmh # Se inicializa la velocidad promedio del dron, si no se pasa un valor, se inicializa en 60.0 km/h
         self.kilometraje_total_km = kilometraje_total_km # Se inicializa el kilomertraje, si no se pasa un valor, se inicializa en 0.0
         self.disponible = disponible # Se inicializa el estado de disponibilidad del dron, si no se pasa un valor, se inicializa en True
@@ -73,17 +79,6 @@ class Dron:
             raise ValueError("El modelo_aeronave no puede estar vacío (ejemplo válido: 'DR-76K', 'Matrice 300').")
         # Si es texto y tiene contenido, se limpia de espacios en blanco
         self.modelo_aeronave = self.modelo_aeronave.strip()
-        
-        # Si no es texto -> TypeError
-        if not isinstance(self.categoria, str):
-            raise TypeError(f"La categoría debe ser un texto (str). Recibido: {type(self.categoria).__name__}")
-
-        # Si es texto, pero NO pertenece al catálogo de SkyRoute -> Excepción de Dominio Propia
-        categoria_limpia = self.categoria.strip().upper()
-        if categoria_limpia not in self.CATEGORIAS_VALIDAS:
-            raise CategoriaDronInvalidoError(self.id_dron, self.categoria, self.CATEGORIAS_VALIDAS)
-        # Si es texto y pertenece al catálogo de SkyRoute, se limpia de espacios en blanco y se asigna a self.categoria
-        self.categoria = categoria_limpia
         
         # En Python bool es subclase de int (True == 1). Si pasan True, lo rechazamos -> TypeError
         if isinstance(self.velocidad_promedio_kmh, bool) or not isinstance(self.velocidad_promedio_kmh, (int, float)):
@@ -133,7 +128,7 @@ class Dron:
             gps_str = "Sin señal GPS"
         return (
             f"\n==================== FICHA DE DRON ====================\n"
-            f"  ID: {self.id_dron} | Modelo: {self.modelo_aeronave} | Cat: {self.categoria}\n"
+            f"  ID: {self.id_dron} | Modelo: {self.modelo_aeronave} | Tipo: {self.__class__.__name__}\n"
             f"  Estado Operacional : [{estado_str}]\n"
             f"  Batería Restante   : {bateria_str} | Altitud: {altitud_str}\n"
             f"  Ubicación GPS      : {gps_str}\n"
@@ -144,9 +139,25 @@ class Dron:
 
     def __repr__(self) -> str:
         return (
-            f"Dron(id_dron='{self.id_dron}', modelo_aeronave='{self.modelo_aeronave}', "
-            f"categoria='{self.categoria}', disponible={self.disponible})"
+            f"{self.__class__.__name__}(id_dron='{self.id_dron}', modelo_aeronave='{self.modelo_aeronave}', "
+            f"disponible={self.disponible})"
         )
+
+    
+    @abstractmethod
+    def ejecutar_mision(self, pedido: Pedido) -> dict:
+        ...
+
+    
+    @abstractmethod
+    def calcular_consumo_estimado(self, distancia_km: float) -> float:
+        ...
+
+
+    @abstractmethod
+    def inspeccionar_sistemas_especializados(self) -> str:
+        ...
+
 
     def actualizar_estado_disponibilidad(self, disponible: bool) -> None:
         # Agrego Funcionalidad. HU-03, UML, Responsabilidades no coinciden. Se agrega el atributo disponible (como se dice en el UML) para poder actualizar el estado de disponibilidad del dron.
