@@ -1,10 +1,11 @@
 # Módulo de cálculos geodésicos (Haversine) y estimación de tiempo de vuelo (ETA)
 # Responsable: Alejandro García Jiménez
 
+from typing import Protocol
 import math
 from src.excepciones.errores import CoordenadaInvalidaError
 
-class CalculadorGeodesico:
+class ICalculadorGeodesico(Protocol):
     # Límites geográficos oficiales del Valle de Aburrá:
     # Latitud Norte: 5°58' a 6°30' -> [5.9667, 6.5000]
     # Longitud Oeste: 75°43' a 75°21' -> [-75.7167, -75.3500]
@@ -13,12 +14,35 @@ class CalculadorGeodesico:
     LON_MIN_ABURRA: float = -75.7167
     LON_MAX_ABURRA: float = -75.3500
 
+    
+    radio_tierra_km: float
+
+    def validar_coordenada(self, coordenada: tuple[float, float]) -> None:
+        """Valida que la coordenada esté dentro del polígono operativo del Valle de Aburrá."""
+        ...
+
+    def calcular_haversine(self, origen: tuple[float, float], destino: tuple[float, float]) -> float:
+        ...
+
+
+    def calcular_tiempo_vuelo_min(self, distancia_km: float, velocidad_km_h: float) -> float:
+        ...
+
+    def calcular_punto_intermedio(
+        self, origen: tuple[float, float], destino: tuple[float, float], fraccion: float
+    ) -> tuple[float, float]:
+        ...
+
+
+class CalculadorGeodesico(ICalculadorGeodesico):
+
     def __init__(self):
         self.radio_tierra_km: float = 6371
-
+    
+    
     # se añade funcion no especificada en el documento
     # esto buscando respetar el principio de responsabilidad unica
-    def _validar_coordenada(self, coordenada: tuple[float, float]) -> None:
+    def validar_coordenada(self, coordenada: tuple[float, float]) -> None:
         """Valida que una coordenada sea una tupla numérica y esté estrictamente dentro del Valle de Aburrá."""
         if not isinstance(coordenada, tuple) or len(coordenada) != 2:
             raise CoordenadaInvalidaError(coordenada)
@@ -31,13 +55,12 @@ class CalculadorGeodesico:
                 f"Coordenadas '{coordenada}' fuera del área operativa del Valle de Aburrá. "
                 f"Deben estar delimitadas en latitud [{self.LAT_MIN_ABURRA}, {self.LAT_MAX_ABURRA}] (5°58' a 6°30' N) "
                 f"y longitud [{self.LON_MIN_ABURRA}, {self.LON_MAX_ABURRA}] (75°43' a 75°21' W)."
-            )
-
-
+                )
+    
     def calcular_haversine(self, origen: tuple[float, float], destino: tuple[float, float]) -> float:
         
-        self._validar_coordenada(origen)
-        self._validar_coordenada(destino)
+        self.validar_coordenada(origen)
+        self.validar_coordenada(destino)
 
         # Desempaquetado de coordenadas (asumiendo que ingresan en grados decimales)
         lat1, lon1 = origen
@@ -83,10 +106,29 @@ class CalculadorGeodesico:
         # Por definición geométrica, Arco = Radio * Ángulo. Al usar el radio en kilómetros, 
         # el resultado final se obtiene directamente en esa misma unidad métrica.   
         return self.radio_tierra_km * c
-
-
+    
+    
     def calcular_tiempo_vuelo_min(self, distancia_km: float, velocidad_km_h: float) -> float:
         # Evitar división por cero o velocidades no válidas
         if velocidad_km_h <= 0.0 or distancia_km <= 0.0:
             return 0.0
         return (distancia_km / velocidad_km_h) * 60.0
+
+    def calcular_punto_intermedio(
+        self, origen: tuple[float, float], destino: tuple[float, float], fraccion: float
+    ) -> tuple[float, float]:
+        """
+        Calcula una coordenada intermedia proporcional entre dos puntos geográficos (interpolación lineal).
+        Asegura que las coordenadas de origen, destino y el punto resultante pertenezcan al Valle de Aburrá.
+        """
+        self.validar_coordenada(origen)
+        self.validar_coordenada(destino)
+        f = max(0.0, min(1.0, float(fraccion)))
+        lat1, lon1 = origen
+        lat2, lon2 = destino
+        lat_intermedia = round(lat1 + (lat2 - lat1) * f, 6)
+        lon_intermedia = round(lon1 + (lon2 - lon1) * f, 6)
+        punto_calculado = (lat_intermedia, lon_intermedia)
+        self.validar_coordenada(punto_calculado)
+        return punto_calculado
+    
