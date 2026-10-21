@@ -28,6 +28,11 @@ class ICalculadorGeodesico(Protocol):
     def calcular_tiempo_vuelo_min(self, distancia_km: float, velocidad_km_h: float) -> float:
         ...
 
+    def calcular_punto_intermedio(
+        self, origen: tuple[float, float], destino: tuple[float, float], fraccion: float
+    ) -> tuple[float, float]:
+        ...
+
 
 class CalculadorGeodesico(ICalculadorGeodesico):
 
@@ -108,4 +113,22 @@ class CalculadorGeodesico(ICalculadorGeodesico):
         if velocidad_km_h <= 0.0 or distancia_km <= 0.0:
             return 0.0
         return (distancia_km / velocidad_km_h) * 60.0
+
+    def calcular_punto_intermedio(
+        self, origen: tuple[float, float], destino: tuple[float, float], fraccion: float
+    ) -> tuple[float, float]:
+        """
+        Calcula una coordenada intermedia proporcional entre dos puntos geográficos (interpolación lineal).
+        Asegura que las coordenadas de origen, destino y el punto resultante pertenezcan al Valle de Aburrá.
+        """
+        self.validar_coordenada(origen)
+        self.validar_coordenada(destino)
+        f = max(0.0, min(1.0, float(fraccion)))
+        lat1, lon1 = origen
+        lat2, lon2 = destino
+        lat_intermedia = round(lat1 + (lat2 - lat1) * f, 6)
+        lon_intermedia = round(lon1 + (lon2 - lon1) * f, 6)
+        punto_calculado = (lat_intermedia, lon_intermedia)
+        self.validar_coordenada(punto_calculado)
+        return punto_calculado
     
