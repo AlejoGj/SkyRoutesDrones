@@ -74,10 +74,31 @@ class DronRescate(Dron):
         self.potenciaAltavozDb = potencia_altavoz_db
 
     def ejecutar_mision(self, pedido: Pedido) -> dict:
-        pass
+        reporte_despegue = super().ejecutar_mision(pedido)
+        print(f"[{self.id_dron}] Ejecutando misión del protocolo de Búsqueda y Rescate...")
+        print(f"  -> Realizando barrido térmico en coordenadas de emergencia y activando altavoz a {self.potencia_altavoz_db} dB.")
+
+        estado_kit = "Kit de auxilios entregado" if self.kit_auxilios_equipado else "Sujeto localizado sin kit"
+        if self.kit_auxilios_equipado:
+            print(f"  -> {estado_kit} en el punto de coordenadas.")
+        else:
+            print(f"  -> {estado_kit}.")
+
+        reporte_despegue.update({
+            "instrumental_activado": "CAMARA_TERMICA_Y_ALTAVOZ",
+            "potencia_altavoz_db": self.potencia_altavoz_db,
+            "barrido_termico": "ACTIVO",
+            "resultado_rescate": estado_kit,
+        })
+        return reporte_despegue
 
     def calcular_consumo_estimado(self, distancia_km: float) -> float:
-        pass
+        if distancia_km < 0:
+            return 0.0
+        return distancia_km * 2.0
 
     def inspeccionar_sistemas_especializados(self) -> str:
-        pass
+        termica = "ENCENDIDA" if self.camara_termica else "APAGADA"
+        kit = "EQUIPADO" if self.kit_auxilios_equipado else "NO EQUIPADO"
+        return f"Diagnóstico: Cámara Térmica [{termica}] | Kit Auxilios [{kit}] | Altavoz [{self.potencia_altavoz_db} dB]"
+
