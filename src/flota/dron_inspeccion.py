@@ -62,10 +62,27 @@ class DronInspeccion(Dron):
         self.rango_sensor_ultrasonico_m = float(rango_sensor_ultrasonico_m)
 
     def ejecutar_mision(self, pedido: Pedido) -> dict:
-        pass
+        reporte_despegue = super().ejecutar_mision(pedido)
+        print(f"[{self.id_dron}] Ejecutando misión de inspección de infraestructura...")
+        print(f"  -> Manteniendo vuelo estacionario a distancia segura de {self.rango_sensor_ultrasonico_m} m mediante ultrasonido.")
+        print(f"  -> Escaneando antenas y vertipuertos con zoom óptico de {self.zoom_optico_x}x.")
+
+        reporte_despegue.update({
+            "instrumental_activado": "SENSOR_ULTRASONICO_Y_ZOOM",
+            "zoom_aplicado": f"{self.zoom_optico_x}x",
+            "distancia_seguridad_m": self.rango_sensor_ultrasonico_m,
+            "estado_especifico": "Inspección finalizada",
+        })
+        return reporte_despegue
 
     def calcular_consumo_estimado(self, distancia_km: float) -> float:
-        pass
+        if distancia_km < 0:
+            return 0.0
+        return distancia_km * 1.5
 
     def inspeccionar_sistemas_especializados(self) -> str:
-        pass
+        return f"Diagnóstico: Zoom Óptico {self.zoom_optico_x}x, Sensor Ultrasónico {self.rango_sensor_ultrasonico_m}m [OPERATIVOS]"
+
+    # Alias para compatibilidad con borrador HU-11.py
+    inspeccionar_sistemas_esepcializados = inspeccionar_sistemas_especializados
+
