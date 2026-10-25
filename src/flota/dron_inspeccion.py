@@ -86,3 +86,14 @@ class DronInspeccion(Dron):
     # Alias para compatibilidad con borrador HU-11.py
     inspeccionar_sistemas_esepcializados = inspeccionar_sistemas_especializados
 
+    def __str__(self) -> str:
+        ficha_base = super().__str__().rstrip()
+        ficha_sin_cierre = ficha_base.rsplit("\n", 1)[0]
+        cierre = "=" * 56
+        return (
+            f"{ficha_sin_cierre}\n"
+            f"  Instrumental       : Zoom Óptico {self.zoom_optico_x}x | Sensor Ultrasónico {self.rango_sensor_ultrasonico_m:.1f} m\n"
+            f"{cierre}"
+        )
+
+

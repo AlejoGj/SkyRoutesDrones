@@ -102,3 +102,16 @@ class DronRescate(Dron):
         kit = "EQUIPADO" if self.kit_auxilios_equipado else "NO EQUIPADO"
         return f"Diagnóstico: Cámara Térmica [{termica}] | Kit Auxilios [{kit}] | Altavoz [{self.potencia_altavoz_db} dB]"
 
+    def __str__(self) -> str:
+        ficha_base = super().__str__().rstrip()
+        ficha_sin_cierre = ficha_base.rsplit("\n", 1)[0]
+        cierre = "=" * 56
+        termica = "Sí" if self.camara_termica else "No"
+        kit = "Sí" if self.kit_auxilios_equipado else "No"
+        return (
+            f"{ficha_sin_cierre}\n"
+            f"  Instrumental       : Térmica: [{termica}] | Kit Auxilio: [{kit}] | Altavoz: [{self.potencia_altavoz_db} dB]\n"
+            f"{cierre}"
+        )
+
+
