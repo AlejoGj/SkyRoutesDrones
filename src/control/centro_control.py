@@ -1,5 +1,5 @@
 # Módulo orquestador del centro de control de operaciones
-# Responsable: Valery Arboleda Ardila
+# Responsable: Valery Arboleda Ardila (Sprint 2 - HU-12)
 
 from datetime import datetime
 from src.usuarios.usuario import Usuario
@@ -7,6 +7,67 @@ from src.pedidos.pedido import Pedido
 from src.flota.dron import Dron
 from src.control.log_operacion import LogOperacion
 
+# Subclases especializadas de la flota (Sprint 2)
+from src.flota.dron_inspeccion import DronInspeccion
+from src.flota.dron_rescate import DronRescate
+
+# Intentos de importación tolerantes a fallos para subclases en desarrollo por compañeros (HU-08 y HU-09)
+try:
+    from src.flota.dron_vigilancia import DronVigilancia
+except ImportError:
+    DronVigilancia = None
+
+try:
+    from src.flota.dron_mapeo import DronMapeo
+except ImportError:
+    DronMapeo = None
+
+try:
+    from src.flota.dron_entrega_ligera import DronEntregaLigera
+except ImportError:
+    DronEntregaLigera = None
+
+try:
+    from src.flota.dron_carga_pesada import DronCargaPesada
+except ImportError:
+    DronCargaPesada = None
+
+
+# Catálogo / Registro de fábrica para instanciar y validar subclases a partir de una categoría (HU-12)
+FABRICA_DRONES: dict[str, type[Dron]] = {
+    'INSPECCION_INFRAESTRUCTURA': DronInspeccion,
+    'BUSQUEDA_RESCATE': DronRescate,
+}
+
+if DronVigilancia is not None:
+    FABRICA_DRONES['VIGILANCIA'] = DronVigilancia
+if DronMapeo is not None:
+    FABRICA_DRONES['MAPEO_TOPOGRAFICO'] = DronMapeo
+if DronEntregaLigera is not None:
+    FABRICA_DRONES['ENTREGA_LIGERA'] = DronEntregaLigera
+if DronCargaPesada is not None:
+    FABRICA_DRONES['CARGA_PESADA'] = DronCargaPesada
+
+
+def registrar_subclase_en_fabrica(categoria: str, clase_dron: type[Dron]) -> None:
+    """
+    Permite registrar o extender dinámicamente el catálogo de la fábrica de drones.
+    """
+    if not isinstance(categoria, str) or not categoria.strip():
+        raise ValueError("La categoría debe ser una cadena de texto no vacía.")
+    if not isinstance(clase_dron, type) or not issubclass(clase_dron, Dron):
+        raise TypeError("El parámetro debe ser una subclase válida de Dron.")
+    FABRICA_DRONES[categoria.strip()] = clase_dron
+
+
+def instanciar_dron_desde_fabrica(categoria: str, *args, **kwargs) -> Dron:
+    """
+    Instancia una subclase de dron a partir de la categoría registrada en FABRICA_DRONES (RF-08, Sprint 2).
+    """
+    if categoria not in FABRICA_DRONES:
+        raise ValueError(f"Categoría '{categoria}' no registrada en FABRICA_DRONES.")
+    clase_dron = FABRICA_DRONES[categoria]
+    return clase_dron(*args, **kwargs)
 
 
 class SistemaCentroControl:
@@ -28,7 +89,6 @@ class SistemaCentroControl:
         self.flota_drones.append(dron)
         print(f"Dron '{dron.id_dron}' ({dron.modelo_aeronave} - {dron.categoria}) agregado a la flota exitosamente.")
         return dron
-
 
     def registrar_usuario(self, usuario: Usuario) -> Usuario:
         if not isinstance(usuario, Usuario):
@@ -53,7 +113,6 @@ class SistemaCentroControl:
         self.pedidos.append(pedido)
         print(f"Pedido '{pedido.id_pedido}' (Categoría: {pedido.categoria_requerida}) registrado exitosamente.")
         return pedido
-
 
     def obtener_drones_disponibles(self) -> list[Dron]:
         drones_desocupados = []
@@ -146,7 +205,6 @@ class SistemaCentroControl:
             print(f"Error al iniciar el retorno a la base para el dron {id_dron}: {e}")
             return False
 
-
     def generar_log(self, evento: str, id_dron: str = None, id_pedido: str = None, detalles: str = "", tipo_evento: str = None) -> LogOperacion:
         tipo = evento or tipo_evento or "EVENTO_GENERAL"
         fecha_actual = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -194,5 +252,3 @@ class SistemaCentroControl:
             f"usuarios={len(self.usuarios_registrados)}, pedidos={len(self.pedidos)}, "
             f"base={self.coordenadas_base})"
         )
-
-
