@@ -170,6 +170,86 @@ class SistemaCentroControl:
         print(f"No hay drones disponibles de la categoría '{pedido_encontrado.categoria_requerida}' en este momento.")
         return False
 
+    def despachar_mision(self, id_pedido: str) -> bool:
+        """
+        Ciclo para el método despachar misión (HU-12):
+        1. Localizar el pedido y validar estado ASIGNADO
+        2. Iniciar el tránsito (EN_TRANSITO)
+        3. Invocar al método ejecutar_mision de forma polimórfica
+        4. Finalizar la misión (COMPLETADO)
+        5. Generar log de auditoría con la información técnica devuelta
+        6. Ordenar el retorno automático a la base
+        """
+        if not isinstance(id_pedido, str) or not id_pedido.strip():
+            print("El ID del pedido debe ser una cadena de texto no vacía.")
+            return False
+
+        # 1. Aqui comenzamos localizando el pedido
+        id_pedido_limpio = id_pedido.strip()
+        pedido_encontrado = None
+        for p in self.pedidos:
+            if p.id_pedido == id_pedido_limpio:
+                pedido_encontrado = p
+                break
+
+        # Validaciones defensivas
+        if not pedido_encontrado:
+            print(f"No se encontró ningún pedido con ID '{id_pedido}'!")
+            return False
+
+        if pedido_encontrado.estado != "ASIGNADO":
+            print(f"El pedido con ID '{id_pedido}' no está en estado 'ASIGNADO' (Estado actual: {pedido_encontrado.estado}).")
+            return False
+
+        dron_ejecutor = pedido_encontrado.dron_asignado
+        if not dron_ejecutor:
+            print(f"El pedido con ID '{id_pedido}' no tiene un dron asignado.")
+            return False
+
+        # 2. Actualizamos el estado ya que aqui inicia el tránsito
+        pedido_encontrado.actualizar_estado('EN_TRANSITO')
+        print(f"Misión {id_pedido_limpio} iniciada. Dron {dron_ejecutor.id_dron} en tránsito.")
+
+        # 3. Invocación polimórfica
+        try:
+            # Habilitar disponibilidad de despegue para el dron reservado para este pedido
+            dron_ejecutor.disponible = True
+
+            # Si la aeronave no cuenta aún con telemetría en base, inicializar telemetría nominal de despegue
+            if getattr(dron_ejecutor, 'telemetria', None) is None:
+                from src.telemetria.telemetria import TelemetriaDrone
+                dron_ejecutor.asignar_telemetria(
+                    TelemetriaDrone(
+                        id_dron=dron_ejecutor.id_dron,
+                        bateria=100.0,
+                        altitud=0.0,
+                        estado_motores='APAGADOS',
+                        coordenadas=self.coordenadas_base
+                    )
+                )
+
+            resultado_mision = dron_ejecutor.ejecutar_mision(pedido_encontrado)
+
+            # 4. Finaliza misión
+            pedido_encontrado.actualizar_estado('COMPLETADO')
+
+            # 5. Genera el Log pero ahora con la info devuelta
+            self.generar_log(
+                evento="MISION_COMPLETADA",
+                id_dron=dron_ejecutor.id_dron,
+                id_pedido=id_pedido_limpio,
+                detalles=f"Resultado técnico: {resultado_mision}"
+            )
+            print(f"Misión {id_pedido_limpio} completada con éxito.")
+
+            # 6. Apenas termina la misión hacemos que vuelva a la base
+            self.gestionar_retorno_a_base(dron_ejecutor.id_dron)
+            return True
+
+        except Exception as e:
+            print(f"Error crítico durante la ejecución polimórfica de la misión: {e}")
+            return False
+
     def gestionar_retorno_a_base(self, id_dron: str) -> bool:
         """
         Ordena el regreso obligatorio de una aeronave a la base central de la empresa (RF-09).
