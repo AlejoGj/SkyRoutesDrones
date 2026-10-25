@@ -123,8 +123,7 @@ class SistemaCentroControl:
 
     def asignar_dron_a_pedido(self, id_pedido: str) -> bool:
         """
-        Cruza información para buscar el primer dron disponible compatible
-        con la categoría solicitada por el pedido y realiza la asignación (RF-08).
+        Ahora asigna el dron evaluando la compatibilidad dinámicamente usando FABRICA_DRONES.
         """
         if not isinstance(id_pedido, str) or not id_pedido.strip():
             print("El ID del pedido debe ser una cadena de texto no vacía.")
@@ -146,8 +145,12 @@ class SistemaCentroControl:
 
         drones_desocupados = self.obtener_drones_disponibles()
 
+        # Ahora aqui buscamos la clase específica que requiere el pedido en nuestro diccionario de las constantes del principio
+        clase_requerida = FABRICA_DRONES.get(pedido_encontrado.categoria_requerida)
+
         for dron in drones_desocupados:
-            if dron.categoria == pedido_encontrado.categoria_requerida:
+            # Reemplazamos la validación de texto por una validación polimórfica de subclase
+            if (clase_requerida and isinstance(dron, clase_requerida)) or (not clase_requerida and dron.categoria == pedido_encontrado.categoria_requerida):
                 pedido_encontrado.vincular_dron(dron)
                 pedido_encontrado.actualizar_estado('ASIGNADO')
 
