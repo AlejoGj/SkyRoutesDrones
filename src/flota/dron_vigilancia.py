@@ -50,3 +50,24 @@ class DronVigilancia(Dron):
         if frecuencia_transmision_ghz <= 0:
             raise ValueError("La frecuencia de transmisión debe ser mayor a 0.0 GHz.")
         self.frecuencia_transmision_ghz = float(frecuencia_transmision_ghz)
+
+    def ejecutar_mision(self, pedido: Pedido) -> dict:
+        reporte_despegue = super().ejecutar_mision(pedido)
+        print(f"{self.id_dron} Ejecutando mision de vigilancia y escolta")
+        print(f"Simulando transmisión de video cifrado a {self.frecuencia_transmision_ghz} GHz")
+        print("Misión de escolta aérea de cargamento en curso")
+
+        reporte_despegue.update({
+            "instrumental_activado": "CAMARAS_Y_VIDEO_CIFRADO",
+            "estado_especifico": "Escolta finalizada sin anomalías"
+        })
+        return reporte_despegue
+
+    def inspeccionar_sistemas_especializados(self) -> str:
+        estado_nocturna = "ACTIVADA" if self.vision_nocturna else "DESACTIVADA"
+        return f"Diagnóstico Seguridad -> Cámara: {self.resolucion_camara_mp}MP | Visión Nocturna: [{estado_nocturna}] | Enlace Video: {self.frecuencia_transmision_ghz}GHz [OPERATIVOS]"
+
+    def calcular_consumo_estimado(self, distancia_km: float) -> float:
+        # Teniendo en cuenta que el streaming de video gasta un poco más de energía por km
+        return distancia_km * 1.3
+
