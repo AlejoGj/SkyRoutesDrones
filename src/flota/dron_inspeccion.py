@@ -1,30 +1,58 @@
 # Módulo de especialización para Dron de Inspección de Infraestructura
-# Responsable: Valery Arboleda Ardila (Sprint 2 - HU-11)
+# Historia de Usuario: HU-11 (Valery Arboleda Ardila)
+# Sprint 2: Herencia, Polimorfismo y Abstracción Formal
 
+# ==============================================================================
+# 1. IMPORTACIONES Y CONTROL DE TIPADO DIFERIDO (PEP 563 & PEP 484)
+# ==============================================================================
 from __future__ import annotations
 from typing import TYPE_CHECKING
 from src.flota.dron import Dron
+from src.excepciones.errores import ActualizarEstadoDronError
 
 if TYPE_CHECKING:
     from src.pedidos.pedido import Pedido
 
 
+# ==============================================================================
+# 2. DEFINICIÓN DE CLASE Y APLICACIÓN DE PILARES DE POO
+# ==============================================================================
+# PILAR: HERENCIA
+# 'DronInspeccion' hereda formalmente de la clase abstracta base 'Dron'.
 class DronInspeccion(Dron):
-    CATEGORIA_ESPECIALIZADA = "INSPECCION_INFRAESTRUCTURA"
+    """
+    Subclase especializada en el diagnóstico de vertipuertos, antenas de comunicación
+    y plataformas elevadas en el Valle de Aburrá.
+    
+    Características Principales:
+    - Cámara óptica de alta magnificación con zoom óptico (x).
+    - Sensor ultrasónico de distancia para vuelo estacionario a distancia segura de colisión (metros).
+    - Tasa de consumo energético especializada (1.5% de batería por kilómetro) por maniobras de precisión.
+    """
+
+    CATEGORIA_ESPECIALIZADA: str = "INSPECCION_INFRAESTRUCTURA"
+    ZOOM_DEFAULT_X: int = 10
+    ULTRASONICO_DEFAULT_M: float = 5.0
 
     def __init__(
         self,
         id_dron: str = None,
         modelo_aeronave: str = None,
-        zoom_optico_x: int = 10,
-        rango_sensor_ultrasonico_m: float = 5.0,
+        zoom_optico_x: int = ZOOM_DEFAULT_X,
+        rango_sensor_ultrasonico_m: float = ULTRASONICO_DEFAULT_M,
         velocidad_promedio_kmh: float = 50.0,
         kilometraje_total_km: float = 0.0,
         disponible: bool = True,
         calculador=None,
         **kwargs,
     ) -> None:
-        # Manejo flexible de orden posicional: permite (zoom, rango, id, modelo) o (id, modelo, zoom, rango)
+        """
+        Inicializa un dron de inspección técnica.
+        
+        Soporta tanto el orden tradicional (id, modelo, zoom, rango) como el orden
+        alternativo (zoom, rango, id, modelo) para máxima tolerancia en scripts del equipo.
+        """
+        # Manejo flexible de orden posicional
         if isinstance(id_dron, (int, float)) and isinstance(zoom_optico_x, (str, type(None))):
             actual_zoom = id_dron
             actual_rango = modelo_aeronave
@@ -44,56 +72,146 @@ class DronInspeccion(Dron):
             calculador=calculador,
         )
 
-        # Categoría especializada oficial fija
         self.categoria = self.CATEGORIA_ESPECIALIZADA
 
-        # Validación defensiva de zoom óptico
-        if isinstance(zoom_optico_x, bool) or not isinstance(zoom_optico_x, int):
-            raise TypeError(f"El zoom óptico debe ser un número entero. Recibido: {type(zoom_optico_x).__name__}")
-        if zoom_optico_x <= 0:
-            raise ValueError(f"El factor de zoom óptico debe ser estrictamente mayor a 0x. Recibido: {zoom_optico_x}")
+        # PILAR: ENCAPSULAMIENTO PROTEGIDO
+        # Asignación a través de setters para validaciones defensivas de dominio
         self.zoom_optico_x = zoom_optico_x
+        self.rango_sensor_ultrasonico_m = rango_sensor_ultrasonico_m
 
-        # Validación defensiva de sensor ultrasónico
-        if isinstance(rango_sensor_ultrasonico_m, bool) or not isinstance(rango_sensor_ultrasonico_m, (int, float)):
-            raise TypeError(f"El rango del sensor ultrasónico debe ser numérico. Recibido: {type(rango_sensor_ultrasonico_m).__name__}")
-        if rango_sensor_ultrasonico_m <= 0:
-            raise ValueError(f"El rango del sensor ultrasónico debe ser estrictamente mayor a 0 metros. Recibido: {rango_sensor_ultrasonico_m}")
-        self.rango_sensor_ultrasonico_m = float(rango_sensor_ultrasonico_m)
+    # ==========================================================================
+    # 3. GETTERS Y SETTERS PROTEGIDOS (ENCAPSULAMIENTO DEFENSIVO)
+    # ==========================================================================
+
+    @property
+    def zoom_optico_x(self) -> int:
+        """Retorna el factor de aumento óptico de la cámara (ej. 10x, 30x)."""
+        return self._zoom_optico_x
+
+    @zoom_optico_x.setter
+    def zoom_optico_x(self, valor: int) -> None:
+        if isinstance(valor, bool) or not isinstance(valor, int):
+            raise TypeError(f"El zoom óptico debe ser un número entero. Recibido: {type(valor).__name__}")
+        if valor <= 0:
+            raise ValueError(f"El factor de zoom óptico debe ser estrictamente mayor a 0x. Recibido: {valor}")
+        self._zoom_optico_x = valor
+
+    @property
+    def rango_sensor_ultrasonico_m(self) -> float:
+        """Retorna la distancia de seguridad del sensor ultrasónico de colisión en metros (m)."""
+        return self._rango_sensor_ultrasonico_m
+
+    @rango_sensor_ultrasonico_m.setter
+    def rango_sensor_ultrasonico_m(self, valor: float) -> None:
+        if isinstance(valor, bool) or not isinstance(valor, (int, float)):
+            raise TypeError(f"El rango del sensor ultrasónico debe ser numérico. Recibido: {type(valor).__name__}")
+        if valor <= 0:
+            raise ValueError(f"El rango del sensor ultrasónico debe ser estrictamente mayor a 0 metros. Recibido: {valor}")
+        self._rango_sensor_ultrasonico_m = float(valor)
+
+    # ==========================================================================
+    # 4. POLIMORFISMO Y ABSTRACCIÓN: IMPLEMENTACIÓN DEL CONTRATO OBLIGATORIO
+    # ==========================================================================
 
     def ejecutar_mision(self, pedido: Pedido) -> dict:
+        """
+        Sobrescribe 'ejecutar_mision' para ejecutar el protocolo de inspección técnica.
+        """
         reporte_despegue = super().ejecutar_mision(pedido)
+
         print(f"[{self.id_dron}] Ejecutando misión de inspección de infraestructura...")
-        print(f"  -> Manteniendo vuelo estacionario a distancia segura de {self.rango_sensor_ultrasonico_m} m mediante ultrasonido.")
-        print(f"  -> Escaneando antenas y vertipuertos con zoom óptico de {self.zoom_optico_x}x.")
+        print(f"  -> Manteniendo vuelo estacionario a distancia segura de {self._rango_sensor_ultrasonico_m:.1f} m mediante ultrasonido.")
+        print(f"  -> Escaneando antenas y vertipuertos con zoom óptico de {self._zoom_optico_x}x.")
 
         reporte_despegue.update({
             "instrumental_activado": "SENSOR_ULTRASONICO_Y_ZOOM",
-            "zoom_aplicado": f"{self.zoom_optico_x}x",
-            "distancia_seguridad_m": self.rango_sensor_ultrasonico_m,
+            "zoom_aplicado": f"{self._zoom_optico_x}x",
+            "distancia_seguridad_m": self._rango_sensor_ultrasonico_m,
             "estado_especifico": "Inspección finalizada",
         })
         return reporte_despegue
 
     def calcular_consumo_estimado(self, distancia_km: float) -> float:
-        if distancia_km < 0:
+        """
+        PILAR: POLIMORFISMO EN CONSUMO ENERGÉTICO (HU-10 / HU-11)
+        
+        Aplica la tasa especializada de 1.5% de batería por kilómetro para inspección:
+            Consumo (%) = distancia_km * 1.5
+        """
+        if isinstance(distancia_km, bool) or not isinstance(distancia_km, (int, float)):
+            raise TypeError(f"La distancia debe ser numérica. Recibido: {type(distancia_km).__name__}")
+        if distancia_km <= 0:
             return 0.0
-        return distancia_km * 1.5
+        return float(distancia_km * 1.5)
 
     def inspeccionar_sistemas_especializados(self) -> str:
-        return f"Diagnóstico: Zoom Óptico {self.zoom_optico_x}x, Sensor Ultrasónico {self.rango_sensor_ultrasonico_m}m [OPERATIVOS]"
+        """
+        PILAR: POLIMORFISMO EN DIAGNÓSTICO TÉCNICO (HU-07 / HU-11)
+        """
+        return f"Diagnóstico: Zoom Óptico {self._zoom_optico_x}x, Sensor Ultrasónico {self._rango_sensor_ultrasonico_m:.1f}m [OPERATIVOS]"
 
-    # Alias para compatibilidad con borrador HU-11.py
+    # Alias para compatibilidad hacia atrás
     inspeccionar_sistemas_esepcializados = inspeccionar_sistemas_especializados
 
+    def predecir_viabilidad_mision(self, distancia_km: float) -> dict:
+        """
+        PILAR: POLIMORFISMO EN PREDICCIÓN ENERGÉTICA PRE-DESPEGUE (HU-10)
+        """
+        if isinstance(distancia_km, bool) or not isinstance(distancia_km, (int, float)):
+            raise TypeError(f"La distancia debe ser numérica. Recibido: {type(distancia_km).__name__}")
+        if distancia_km < 0:
+            raise ValueError(f"La distancia no puede ser negativa. Recibido: {distancia_km}")
+
+        consumo_estimado = self.calcular_consumo_estimado(distancia_km)
+        bateria_actual = self.telemetria.bateria if self.telemetria is not None else 0.0
+        tiene_telemetria = self.telemetria is not None
+
+        viable = tiene_telemetria and (bateria_actual >= consumo_estimado)
+        bateria_remanente = max(0.0, bateria_actual - consumo_estimado) if viable else 0.0
+
+        if not tiene_telemetria:
+            motivo = "Misión no viable: el dron no tiene telemetría asignada."
+        elif bateria_actual < consumo_estimado:
+            motivo = f"Misión no viable: batería insuficiente ({bateria_actual:.1f}% actual vs. {consumo_estimado:.1f}% requerido por inspección estacionaria)."
+        else:
+            motivo = f"Misión viable: autonomía de inspección suficiente con remanente proyectado de {bateria_remanente:.1f}%."
+
+        return {
+            "id_dron": self.id_dron,
+            "tipo_dron": self.__class__.__name__,
+            "distancia_km": round(float(distancia_km), 2),
+            "consumo_estimado_pct": round(consumo_estimado, 2),
+            "bateria_actual_pct": round(bateria_actual, 2),
+            "bateria_remanente_pct": round(bateria_remanente, 2),
+            "mision_viable": viable,
+            "diagnostico_autonomia": motivo,
+        }
+
+    # ==========================================================================
+    # 5. REPRESENTACIÓN MULTILÍNEA Y FICHA TÉCNICA
+    # ==========================================================================
+
     def __str__(self) -> str:
+        """
+        Sobrescribe __str__ reutilizando la ficha base vía 'super().__str__()'
+        e integrando los aditamentos de inspección técnica.
+        """
         ficha_base = super().__str__().rstrip()
         ficha_sin_cierre = ficha_base.rsplit("\n", 1)[0]
         cierre = "=" * 56
         return (
             f"{ficha_sin_cierre}\n"
-            f"  Instrumental       : Zoom Óptico {self.zoom_optico_x}x | Sensor Ultrasónico {self.rango_sensor_ultrasonico_m:.1f} m\n"
+            f"  Instrumental       : Zoom Óptico {self._zoom_optico_x}x | Sensor Ultrasónico {self._rango_sensor_ultrasonico_m:.1f} m\n"
+            f"  Eficiencia Consumo : 1.5% bat/km (Tasa Inspección)\n"
             f"{cierre}"
         )
 
-
+    def __repr__(self) -> str:
+        """
+        Sobrescribe __repr__ para extender la representación oficial con aditamentos de inspección.
+        """
+        return (
+            f"DronInspeccion(id_dron='{self.id_dron}', modelo_aeronave='{self.modelo_aeronave}', "
+            f"zoom_optico_x={self._zoom_optico_x}, rango_sensor_ultrasonico_m={self._rango_sensor_ultrasonico_m}, "
+            f"disponible={self.disponible})"
+        )
