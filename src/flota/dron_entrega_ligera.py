@@ -210,6 +210,44 @@ class DronEntregaLigera(Dron):
         suelta = "OPERATIVO" if self._mecanismo_suelta_rapida else "NO_DISPONIBLE"
         return f"Diagnóstico: Capacidad {self._capacidad_carga_kg:.1f}kg | Refrigeración [{refri}] | Suelta Rápida [{suelta}]"
 
+    def predecir_viabilidad_mision(self, distancia_km: float) -> dict:
+        """
+        PILAR: POLIMORFISMO EN PREDICCIÓN ENERGÉTICA PRE-DESPEGUE (HU-10)
+        
+        Evalúa y predice con exactitud técnica si la batería actual soportará el viaje
+        antes de autorizar el despegue. Utiliza internamente 'calcular_consumo_estimado(distancia_km)'
+        según la morfología de transporte ligero.
+        """
+        if isinstance(distancia_km, bool) or not isinstance(distancia_km, (int, float)):
+            raise TypeError(f"La distancia debe ser numérica. Recibido: {type(distancia_km).__name__}")
+        if distancia_km < 0:
+            raise ValueError(f"La distancia no puede ser negativa. Recibido: {distancia_km}")
+
+        consumo_estimado = self.calcular_consumo_estimado(distancia_km)
+        bateria_actual = self.telemetria.bateria if self.telemetria is not None else 0.0
+        tiene_telemetria = self.telemetria is not None
+
+        viable = tiene_telemetria and (bateria_actual >= consumo_estimado)
+        bateria_remanente = max(0.0, bateria_actual - consumo_estimado) if viable else 0.0
+
+        if not tiene_telemetria:
+            motivo = "Misión no viable: el dron no tiene telemetría asignada."
+        elif bateria_actual < consumo_estimado:
+            motivo = f"Misión no viable: batería insuficiente ({bateria_actual:.1f}% actual vs. {consumo_estimado:.1f}% requerido)."
+        else:
+            motivo = f"Misión viable: autonomía suficiente con remanente proyectado de {bateria_remanente:.1f}%."
+
+        return {
+            "id_dron": self.id_dron,
+            "tipo_dron": self.__class__.__name__,
+            "distancia_km": round(float(distancia_km), 2),
+            "consumo_estimado_pct": round(consumo_estimado, 2),
+            "bateria_actual_pct": round(bateria_actual, 2),
+            "bateria_remanente_pct": round(bateria_remanente, 2),
+            "mision_viable": viable,
+            "diagnostico_autonomia": motivo,
+        }
+
     # ==========================================================================
     # 6. REPRESENTACIÓN MULTILÍNEA Y FICHA TÉCNICA (HU-10)
     # ==========================================================================
@@ -217,7 +255,7 @@ class DronEntregaLigera(Dron):
     def __str__(self) -> str:
         """
         Sobrescribe __str__ reutilizando la ficha base de 'Dron' vía 'super().__str__()'
-        e integrando de forma armónica los aditamentos especializados de transporte ligero.
+        e integrando de forma armónica los aditamentos especializados y la tasa de consumo de transporte ligero.
         """
         ficha_base = super().__str__().rstrip()
         ficha_sin_cierre = ficha_base.rsplit("\n", 1)[0]
@@ -228,5 +266,17 @@ class DronEntregaLigera(Dron):
             f"{ficha_sin_cierre}\n"
             f"  Capacidad Máxima   : {self._capacidad_carga_kg:.1f} kg\n"
             f"  Refrigeración      : [{refri}] | Suelta Rápida: [{suelta}]\n"
+            f"  Eficiencia Consumo : 1.2% bat/km (Tasa Ligera)\n"
             f"{cierre}"
+        )
+
+    def __repr__(self) -> str:
+        """
+        Sobrescribe __repr__ para extender la representación técnica oficial con
+        los parámetros especializados de carga ligera (HU-10).
+        """
+        return (
+            f"DronEntregaLigera(id_dron='{self.id_dron}', modelo_aeronave='{self.modelo_aeronave}', "
+            f"capacidad_carga_kg={self._capacidad_carga_kg}, compartimento_refrigerado={self._compartimento_refrigerado}, "
+            f"mecanismo_suelta_rapida={self._mecanismo_suelta_rapida}, disponible={self.disponible})"
         )
