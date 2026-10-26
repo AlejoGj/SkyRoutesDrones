@@ -1,5 +1,5 @@
 # Módulo orquestador del centro de control de operaciones
-# Responsable: Valery Arboleda Ardila
+# Responsable: Valery Arboleda Ardila (Sprint 2 - HU-12)
 
 from datetime import datetime
 from src.usuarios.usuario import Usuario
@@ -7,6 +7,67 @@ from src.pedidos.pedido import Pedido
 from src.flota.dron import Dron
 from src.control.log_operacion import LogOperacion
 
+# Subclases especializadas de la flota (Sprint 2)
+from src.flota.dron_inspeccion import DronInspeccion
+from src.flota.dron_rescate import DronRescate
+
+# Intentos de importación tolerantes a fallos para subclases en desarrollo por compañeros (HU-08 y HU-09)
+try:
+    from src.flota.dron_vigilancia import DronVigilancia
+except ImportError:
+    DronVigilancia = None
+
+try:
+    from src.flota.dron_mapeo import DronMapeo
+except ImportError:
+    DronMapeo = None
+
+try:
+    from src.flota.dron_entrega_ligera import DronEntregaLigera
+except ImportError:
+    DronEntregaLigera = None
+
+try:
+    from src.flota.dron_carga_pesada import DronCargaPesada
+except ImportError:
+    DronCargaPesada = None
+
+
+# Catálogo / Registro de fábrica para instanciar y validar subclases a partir de una categoría (HU-12)
+FABRICA_DRONES: dict[str, type[Dron]] = {
+    'INSPECCION_INFRAESTRUCTURA': DronInspeccion,
+    'BUSQUEDA_RESCATE': DronRescate,
+}
+
+if DronVigilancia is not None:
+    FABRICA_DRONES['VIGILANCIA'] = DronVigilancia
+if DronMapeo is not None:
+    FABRICA_DRONES['MAPEO_TOPOGRAFICO'] = DronMapeo
+if DronEntregaLigera is not None:
+    FABRICA_DRONES['ENTREGA_LIGERA'] = DronEntregaLigera
+if DronCargaPesada is not None:
+    FABRICA_DRONES['CARGA_PESADA'] = DronCargaPesada
+
+
+def registrar_subclase_en_fabrica(categoria: str, clase_dron: type[Dron]) -> None:
+    """
+    Permite registrar o extender dinámicamente el catálogo de la fábrica de drones.
+    """
+    if not isinstance(categoria, str) or not categoria.strip():
+        raise ValueError("La categoría debe ser una cadena de texto no vacía.")
+    if not isinstance(clase_dron, type) or not issubclass(clase_dron, Dron):
+        raise TypeError("El parámetro debe ser una subclase válida de Dron.")
+    FABRICA_DRONES[categoria.strip()] = clase_dron
+
+
+def instanciar_dron_desde_fabrica(categoria: str, *args, **kwargs) -> Dron:
+    """
+    Instancia una subclase de dron a partir de la categoría registrada en FABRICA_DRONES (RF-08, Sprint 2).
+    """
+    if categoria not in FABRICA_DRONES:
+        raise ValueError(f"Categoría '{categoria}' no registrada en FABRICA_DRONES.")
+    clase_dron = FABRICA_DRONES[categoria]
+    return clase_dron(*args, **kwargs)
 
 
 class SistemaCentroControl:
@@ -28,7 +89,6 @@ class SistemaCentroControl:
         self.flota_drones.append(dron)
         print(f"Dron '{dron.id_dron}' ({dron.modelo_aeronave} - {dron.categoria}) agregado a la flota exitosamente.")
         return dron
-
 
     def registrar_usuario(self, usuario: Usuario) -> Usuario:
         if not isinstance(usuario, Usuario):
@@ -54,7 +114,6 @@ class SistemaCentroControl:
         print(f"Pedido '{pedido.id_pedido}' (Categoría: {pedido.categoria_requerida}) registrado exitosamente.")
         return pedido
 
-
     def obtener_drones_disponibles(self) -> list[Dron]:
         drones_desocupados = []
         for dron in self.flota_drones:
@@ -64,8 +123,7 @@ class SistemaCentroControl:
 
     def asignar_dron_a_pedido(self, id_pedido: str) -> bool:
         """
-        Cruza información para buscar el primer dron disponible compatible
-        con la categoría solicitada por el pedido y realiza la asignación (RF-08).
+        Ahora asigna el dron evaluando la compatibilidad dinámicamente usando FABRICA_DRONES.
         """
         if not isinstance(id_pedido, str) or not id_pedido.strip():
             print("El ID del pedido debe ser una cadena de texto no vacía.")
@@ -87,8 +145,12 @@ class SistemaCentroControl:
 
         drones_desocupados = self.obtener_drones_disponibles()
 
+        # Ahora aqui buscamos la clase específica que requiere el pedido en nuestro diccionario de las constantes del principio
+        clase_requerida = FABRICA_DRONES.get(pedido_encontrado.categoria_requerida)
+
         for dron in drones_desocupados:
-            if dron.categoria == pedido_encontrado.categoria_requerida:
+            # Reemplazamos la validación de texto por una validación polimórfica de subclase
+            if (clase_requerida and isinstance(dron, clase_requerida)) or (not clase_requerida and dron.categoria == pedido_encontrado.categoria_requerida):
                 pedido_encontrado.vincular_dron(dron)
                 pedido_encontrado.actualizar_estado('ASIGNADO')
 
@@ -107,6 +169,86 @@ class SistemaCentroControl:
 
         print(f"No hay drones disponibles de la categoría '{pedido_encontrado.categoria_requerida}' en este momento.")
         return False
+
+    def despachar_mision(self, id_pedido: str) -> bool:
+        """
+        Ciclo para el método despachar misión (HU-12):
+        1. Localizar el pedido y validar estado ASIGNADO
+        2. Iniciar el tránsito (EN_TRANSITO)
+        3. Invocar al método ejecutar_mision de forma polimórfica
+        4. Finalizar la misión (COMPLETADO)
+        5. Generar log de auditoría con la información técnica devuelta
+        6. Ordenar el retorno automático a la base
+        """
+        if not isinstance(id_pedido, str) or not id_pedido.strip():
+            print("El ID del pedido debe ser una cadena de texto no vacía.")
+            return False
+
+        # 1. Aqui comenzamos localizando el pedido
+        id_pedido_limpio = id_pedido.strip()
+        pedido_encontrado = None
+        for p in self.pedidos:
+            if p.id_pedido == id_pedido_limpio:
+                pedido_encontrado = p
+                break
+
+        # Validaciones defensivas
+        if not pedido_encontrado:
+            print(f"No se encontró ningún pedido con ID '{id_pedido}'!")
+            return False
+
+        if pedido_encontrado.estado != "ASIGNADO":
+            print(f"El pedido con ID '{id_pedido}' no está en estado 'ASIGNADO' (Estado actual: {pedido_encontrado.estado}).")
+            return False
+
+        dron_ejecutor = pedido_encontrado.dron_asignado
+        if not dron_ejecutor:
+            print(f"El pedido con ID '{id_pedido}' no tiene un dron asignado.")
+            return False
+
+        # 2. Actualizamos el estado ya que aqui inicia el tránsito
+        pedido_encontrado.actualizar_estado('EN_TRANSITO')
+        print(f"Misión {id_pedido_limpio} iniciada. Dron {dron_ejecutor.id_dron} en tránsito.")
+
+        # 3. Invocación polimórfica
+        try:
+            # Habilitar disponibilidad de despegue para el dron reservado para este pedido
+            dron_ejecutor.disponible = True
+
+            # Si la aeronave no cuenta aún con telemetría en base, inicializar telemetría nominal de despegue
+            if getattr(dron_ejecutor, 'telemetria', None) is None:
+                from src.telemetria.telemetria import TelemetriaDrone
+                dron_ejecutor.asignar_telemetria(
+                    TelemetriaDrone(
+                        id_dron=dron_ejecutor.id_dron,
+                        bateria=100.0,
+                        altitud=0.0,
+                        estado_motores='APAGADOS',
+                        coordenadas=self.coordenadas_base
+                    )
+                )
+
+            resultado_mision = dron_ejecutor.ejecutar_mision(pedido_encontrado)
+
+            # 4. Finaliza misión
+            pedido_encontrado.actualizar_estado('COMPLETADO')
+
+            # 5. Genera el Log pero ahora con la info devuelta
+            self.generar_log(
+                evento="MISION_COMPLETADA",
+                id_dron=dron_ejecutor.id_dron,
+                id_pedido=id_pedido_limpio,
+                detalles=f"Resultado técnico: {resultado_mision}"
+            )
+            print(f"Misión {id_pedido_limpio} completada con éxito.")
+
+            # 6. Apenas termina la misión hacemos que vuelva a la base
+            self.gestionar_retorno_a_base(dron_ejecutor.id_dron)
+            return True
+
+        except Exception as e:
+            print(f"Error crítico durante la ejecución polimórfica de la misión: {e}")
+            return False
 
     def gestionar_retorno_a_base(self, id_dron: str) -> bool:
         """
@@ -145,7 +287,6 @@ class SistemaCentroControl:
         except Exception as e:
             print(f"Error al iniciar el retorno a la base para el dron {id_dron}: {e}")
             return False
-
 
     def generar_log(self, evento: str, id_dron: str = None, id_pedido: str = None, detalles: str = "", tipo_evento: str = None) -> LogOperacion:
         tipo = evento or tipo_evento or "EVENTO_GENERAL"
@@ -194,5 +335,3 @@ class SistemaCentroControl:
             f"usuarios={len(self.usuarios_registrados)}, pedidos={len(self.pedidos)}, "
             f"base={self.coordenadas_base})"
         )
-
-
