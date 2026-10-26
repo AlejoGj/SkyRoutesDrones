@@ -27,8 +27,9 @@ class Pedido:
         id_pedido: str,
         usuario_solicitante: Usuario,
         categoria_requerida: str,
-        coordenada_destino: tuple[float, float],
-        peso_carga_kg: float = 0.0
+        coordenada_destino: tuple[float, float] | None = None,
+        peso_carga_kg: float = 0.0,
+        direccion_destino: str | None = None
     ) -> None:
         # ID DEL PEDIDO
         if not isinstance(id_pedido, str):
@@ -52,14 +53,24 @@ class Pedido:
             raise ValueError("La categoría no es válida. Por favor, intenta de nuevo.")
         self.categoria_requerida = categoria_limpia
 
-        # COORDENADA DEL DESTINO
-        if not isinstance(coordenada_destino, tuple):
-            raise TypeError("Las coordenadas del destino deben ser una tupla. Por favor, intenta de nuevo")
-        if not coordenada_destino:
-            raise ValueError("Las coordenadas no pueden estar vacías. Por favor, intenta de nuevo.")
-        if len(coordenada_destino) != 2:
-            raise ValueError("Las coordenadas deben contener exactamente dos valores: (latitud, longitud).")
+        # VALIDACIÓN DE DESTINO (Debe suministrarse al menos la dirección escrita o la tupla de coordenadas)
+        tiene_coordenadas = coordenada_destino is not None
+        tiene_direccion = bool(direccion_destino and isinstance(direccion_destino, str) and direccion_destino.strip())
+
+        if not tiene_coordenadas and not tiene_direccion:
+            raise ValueError("Debe proporcionar al menos una dirección textual válida o una tupla de coordenadas de destino.")
+
+        # COORDENADA DEL DESTINO (Si se proporciona de inmediato)
+        if tiene_coordenadas:
+            if not isinstance(coordenada_destino, tuple):
+                raise TypeError("Las coordenadas del destino deben ser una tupla. Por favor, intenta de nuevo")
+            if len(coordenada_destino) != 2:
+                raise ValueError("Las coordenadas deben contener exactamente dos valores: (latitud, longitud).")
+            if not isinstance(coordenada_destino[0], (int, float)) or not isinstance(coordenada_destino[1], (int, float)):
+                raise TypeError("Las coordenadas deben ser números reales (latitud, longitud).")
+
         self.coordenada_destino = coordenada_destino
+        self.direccion_destino = direccion_destino.strip() if tiene_direccion else None
 
         # PESO_CARGA
         if isinstance(peso_carga_kg, bool) or not isinstance(peso_carga_kg, (int, float)):
@@ -91,9 +102,10 @@ class Pedido:
 
     def __str__(self) -> str:
         dron_info = self.dron_asignado.id_dron if self.dron_asignado else "Sin asignar"
+        destino_info = f"{self.coordenada_destino}" if self.coordenada_destino else f"'{self.direccion_destino}' (Pendiente Geocodificación)"
         return (
             f"Pedido [{self.id_pedido}] - Cat: {self.categoria_requerida} - "
-            f"Estado: {self.estado} - Dron: {dron_info} - Destino: {self.coordenada_destino}"
+            f"Estado: {self.estado} - Dron: {dron_info} - Destino: {destino_info}"
         )
 
     def __repr__(self) -> str:

@@ -99,3 +99,13 @@ class CategoriaDronInvalidoError(DronError):
         self.categorias_permitidas = categorias_permitidas
 
 
+class GeocodificacionError(Exception):
+    """Excepción cuando falla la geocodificación de una dirección o sale del Valle de Aburrá."""
+    def __init__(self, direccion: str, message: str = None) -> None:
+        if message is None:
+            message = f"No se pudo geocodificar la dirección '{direccion}' dentro del Valle de Aburrá."
+        super().__init__(message)
+        self.direccion = direccion
+
+
+

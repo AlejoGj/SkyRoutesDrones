@@ -1,0 +1,2 @@
+# Dependencias de SkyRoute Drones
+requests>=2.28.0
