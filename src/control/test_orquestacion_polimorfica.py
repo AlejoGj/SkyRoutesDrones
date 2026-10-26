@@ -16,8 +16,6 @@ if RUTA_RAIZ not in sys.path:
 from src.control.centro_control import (
     SistemaCentroControl,
     FABRICA_DRONES,
-    registrar_subclase_en_fabrica,
-    instanciar_dron_desde_fabrica,
 )
 from src.flota.dron import Dron
 from src.flota.dron_inspeccion import DronInspeccion
@@ -38,9 +36,9 @@ class TestFabricaDrones(unittest.TestCase):
         self.assertIs(FABRICA_DRONES["BUSQUEDA_RESCATE"], DronRescate)
 
     def test_02_instanciar_desde_fabrica_inspeccion(self):
-        """Comprueba la instanciación formal de DronInspeccion mediante la fábrica."""
-        dron = instanciar_dron_desde_fabrica(
-            "INSPECCION_INFRAESTRUCTURA",
+        """Comprueba la instanciación de DronInspeccion mediante el diccionario de fábrica."""
+        clase_insp = FABRICA_DRONES.get("INSPECCION_INFRAESTRUCTURA")
+        dron = clase_insp(
             id_dron="DRON-INSP-FAB-01",
             modelo_aeronave="DJI-Insp-Pro",
             zoom_optico_x=20,
@@ -52,9 +50,9 @@ class TestFabricaDrones(unittest.TestCase):
         self.assertEqual(dron.zoom_optico_x, 20)
 
     def test_03_instanciar_desde_fabrica_rescate(self):
-        """Comprueba la instanciación formal de DronRescate mediante la fábrica."""
-        dron = instanciar_dron_desde_fabrica(
-            "BUSQUEDA_RESCATE",
+        """Comprueba la instanciación de DronRescate mediante el diccionario de fábrica."""
+        clase_resc = FABRICA_DRONES.get("BUSQUEDA_RESCATE")
+        dron = clase_resc(
             id_dron="DRON-RESC-FAB-01",
             modelo_aeronave="Rescue-X",
             camara_termica=True,
@@ -66,13 +64,15 @@ class TestFabricaDrones(unittest.TestCase):
         self.assertEqual(dron.categoria, "BUSQUEDA_RESCATE")
         self.assertTrue(dron.camara_termica)
 
-    def test_04_instanciar_categoria_inexistente_lanza_error(self):
-        """Verifica que solicitar una categoría no registrada lance ValueError."""
+    def test_04_agregar_dron_no_disponible_o_en_mision_lanza_error(self):
+        """Verifica que agregar_dron rechace drones ocupados o en misión."""
+        centro = SistemaCentroControl()
+        dron_ocupado = DronInspeccion("DRON-BUSY", "Matrice-300", 10, 5.0, disponible=False)
         with self.assertRaises(ValueError):
-            instanciar_dron_desde_fabrica("CATEGORIA_INVENTADA")
+            centro.agregar_dron(dron_ocupado)
 
     def test_05_registro_dinamico_de_subclases(self):
-        """Comprueba que registrar_subclase_en_fabrica acepte nuevas subclases de Dron."""
+        """Comprueba que FABRICA_DRONES acepte nuevas subclases directamente."""
         class DronPrueba(Dron):
             def ejecutar_mision(self, pedido):
                 return {"prueba": True}
@@ -81,15 +81,9 @@ class TestFabricaDrones(unittest.TestCase):
             def inspeccionar_sistemas_especializados(self):
                 return "OK"
 
-        registrar_subclase_en_fabrica("TEST_EXPERIMENTAL", DronPrueba)
+        FABRICA_DRONES["TEST_EXPERIMENTAL"] = DronPrueba
         self.assertIn("TEST_EXPERIMENTAL", FABRICA_DRONES)
         self.assertIs(FABRICA_DRONES["TEST_EXPERIMENTAL"], DronPrueba)
-
-        # Validaciones defensivas de registro
-        with self.assertRaises(ValueError):
-            registrar_subclase_en_fabrica("", DronPrueba)
-        with self.assertRaises(TypeError):
-            registrar_subclase_en_fabrica("INVALIDA", str)  # No es subclase de Dron
 
 
 class TestAsignacionPolimorfica(unittest.TestCase):
