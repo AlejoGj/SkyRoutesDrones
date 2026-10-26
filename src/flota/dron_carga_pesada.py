@@ -187,6 +187,44 @@ class DronCargaPesada(Dron):
             f"Volumen: {self._volumen_carga_m3:.1f}m³ | Remolque: {self._potencia_remolque_w:.0f}W [OPERATIVOS]"
         )
 
+    def predecir_viabilidad_mision(self, distancia_km: float) -> dict:
+        """
+        PILAR: POLIMORFISMO EN PREDICCIÓN ENERGÉTICA PRE-DESPEGUE (HU-10)
+        
+        Evalúa y predice con exactitud técnica si la batería actual del dron industrial
+        soportará la misión antes del despegue, aplicando la tasa polinómica según
+        sus rotores activos y el arrastre de carga pesada.
+        """
+        if isinstance(distancia_km, bool) or not isinstance(distancia_km, (int, float)):
+            raise TypeError(f"La distancia debe ser numérica. Recibido: {type(distancia_km).__name__}")
+        if distancia_km < 0:
+            raise ValueError(f"La distancia no puede ser negativa. Recibido: {distancia_km}")
+
+        consumo_estimado = self.calcular_consumo_estimado(distancia_km)
+        bateria_actual = self.telemetria.bateria if self.telemetria is not None else 0.0
+        tiene_telemetria = self.telemetria is not None
+
+        viable = tiene_telemetria and (bateria_actual >= consumo_estimado)
+        bateria_remanente = max(0.0, bateria_actual - consumo_estimado) if viable else 0.0
+
+        if not tiene_telemetria:
+            motivo = "Misión no viable: el dron no tiene telemetría asignada."
+        elif bateria_actual < consumo_estimado:
+            motivo = f"Misión no viable: batería insuficiente ({bateria_actual:.1f}% actual vs. {consumo_estimado:.1f}% requerido por arrastre industrial)."
+        else:
+            motivo = f"Misión viable: autonomía pesada suficiente con remanente proyectado de {bateria_remanente:.1f}%."
+
+        return {
+            "id_dron": self.id_dron,
+            "tipo_dron": self.__class__.__name__,
+            "distancia_km": round(float(distancia_km), 2),
+            "consumo_estimado_pct": round(consumo_estimado, 2),
+            "bateria_actual_pct": round(bateria_actual, 2),
+            "bateria_remanente_pct": round(bateria_remanente, 2),
+            "mision_viable": viable,
+            "diagnostico_autonomia": motivo,
+        }
+
     # ==========================================================================
     # 5. REPRESENTACIÓN MULTILÍNEA Y FICHA TÉCNICA (HU-10)
     # ==========================================================================
@@ -194,14 +232,27 @@ class DronCargaPesada(Dron):
     def __str__(self) -> str:
         """
         Sobrescribe __str__ reutilizando la ficha base vía 'super().__str__()'
-        e integrando las especificaciones industriales de la bodega y los rotores.
+        e integrando las especificaciones industriales de la bodega, rotores y eficiencia energética.
         """
         ficha_base = super().__str__().rstrip()
         ficha_sin_cierre = ficha_base.rsplit("\n", 1)[0]
         cierre = "=" * 56
+        tasa_consumo = 2.5 + (self._numero_rotores * 0.1)
         return (
             f"{ficha_sin_cierre}\n"
             f"  Volumen de Bodega  : {self._volumen_carga_m3:.1f} m³\n"
             f"  Tren de Propulsión : {self._numero_rotores} rotores | Remolque: {self._potencia_remolque_w:.0f} W\n"
+            f"  Eficiencia Consumo : {tasa_consumo:.1f}% bat/km (Base 2.5% + {self._numero_rotores} rotores x 0.1%)\n"
             f"{cierre}"
+        )
+
+    def __repr__(self) -> str:
+        """
+        Sobrescribe __repr__ para extender la representación técnica oficial con
+        los parámetros especializados de carga pesada (HU-10).
+        """
+        return (
+            f"DronCargaPesada(id_dron='{self.id_dron}', modelo_aeronave='{self.modelo_aeronave}', "
+            f"volumen_carga_m3={self._volumen_carga_m3}, numero_rotores={self._numero_rotores}, "
+            f"potencia_remolque_w={self._potencia_remolque_w}, disponible={self.disponible})"
         )
