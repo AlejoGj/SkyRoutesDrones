@@ -49,26 +49,6 @@ if DronCargaPesada is not None:
     FABRICA_DRONES['CARGA_PESADA'] = DronCargaPesada
 
 
-def registrar_subclase_en_fabrica(categoria: str, clase_dron: type[Dron]) -> None:
-    """
-    Permite registrar o extender dinámicamente el catálogo de la fábrica de drones.
-    """
-    if not isinstance(categoria, str) or not categoria.strip():
-        raise ValueError("La categoría debe ser una cadena de texto no vacía.")
-    if not isinstance(clase_dron, type) or not issubclass(clase_dron, Dron):
-        raise TypeError("El parámetro debe ser una subclase válida de Dron.")
-    FABRICA_DRONES[categoria.strip()] = clase_dron
-
-
-def instanciar_dron_desde_fabrica(categoria: str, *args, **kwargs) -> Dron:
-    """
-    Instancia una subclase de dron a partir de la categoría registrada en FABRICA_DRONES (RF-08, Sprint 2).
-    """
-    if categoria not in FABRICA_DRONES:
-        raise ValueError(f"Categoría '{categoria}' no registrada en FABRICA_DRONES.")
-    clase_dron = FABRICA_DRONES[categoria]
-    return clase_dron(*args, **kwargs)
-
 
 class SistemaCentroControl:
     def __init__(self, lat_base: float = 6.2089, lon_base: float = -75.5684) -> None:
@@ -85,6 +65,10 @@ class SistemaCentroControl:
         for d in self.flota_drones:
             if d.id_dron == dron.id_dron:
                 raise ValueError(f"El dron con ID '{dron.id_dron}' ya está registrado en la flota.")
+
+
+        if not dron.disponible or dron.en_mision:
+            raise ValueError(f"El dron '{dron.id_dron}' debe estar completamente libre (disponible y no en misión) para ingresar a la flota activa.")
 
         self.flota_drones.append(dron)
         print(f"Dron '{dron.id_dron}' ({dron.modelo_aeronave} - {dron.categoria}) agregado a la flota exitosamente.")
