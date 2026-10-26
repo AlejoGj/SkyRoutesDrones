@@ -6,16 +6,29 @@ from src.usuarios.usuario import Usuario
 from src.pedidos.pedido import Pedido
 from src.flota.dron import Dron
 from src.control.log_operacion import LogOperacion
+from src.servicios.geocodificador import (
+    IServicioGeocodificador,
+    ServicioGeocodificadorOSM,
+)
+from src.excepciones.errores import GeocodificacionError, CoordenadaInvalidaError
 
 
 
 class SistemaCentroControl:
-    def __init__(self, lat_base: float = 6.2089, lon_base: float = -75.5684) -> None:
+    def __init__(
+        self,
+        lat_base: float = 6.2089,
+        lon_base: float = -75.5684,
+        geocodificador: IServicioGeocodificador | None = None
+    ) -> None:
         self.flota_drones: list[Dron] = []
         self.usuarios_registrados: list[Usuario] = []
         self.pedidos: list[Pedido] = []
         self.historial_logs: list[LogOperacion] = []
         self.coordenadas_base: tuple[float, float] = (float(lat_base), float(lon_base))
+        self.geocodificador: IServicioGeocodificador = (
+            geocodificador if geocodificador is not None else ServicioGeocodificadorOSM()
+        )
 
     def agregar_dron(self, dron: Dron) -> Dron:
         if not isinstance(dron, Dron):
@@ -26,7 +39,8 @@ class SistemaCentroControl:
                 raise ValueError(f"El dron con ID '{dron.id_dron}' ya está registrado en la flota.")
 
         self.flota_drones.append(dron)
-        print(f"Dron '{dron.id_dron}' ({dron.modelo_aeronave} - {dron.categoria}) agregado a la flota exitosamente.")
+        categoria_dron = getattr(dron, "categoria", getattr(dron, "modelo_aeronave", "ESTANDAR"))
+        print(f"Dron '{dron.id_dron}' ({dron.modelo_aeronave} - {categoria_dron}) agregado a la flota exitosamente.")
         return dron
 
 
@@ -49,6 +63,25 @@ class SistemaCentroControl:
         for p in self.pedidos:
             if p.id_pedido == pedido.id_pedido:
                 raise ValueError(f"El pedido con ID '{pedido.id_pedido}' ya está registrado!")
+
+        # Si el pedido no cuenta con coordenadas pero tiene una dirección textual,
+        # se delega la resolución geográfica al servicio inyectado (OSM o Catálogo Local)
+        if pedido.coordenada_destino is None and pedido.direccion_destino:
+            try:
+                pedido.coordenada_destino = self.geocodificador.geocodificar_direccion(pedido.direccion_destino)
+                self.generar_log(
+                    evento="GEOCODIFICACION_EXITOSA",
+                    id_pedido=pedido.id_pedido,
+                    detalles=f"Direccion '{pedido.direccion_destino}' resuelta exitosamente a {pedido.coordenada_destino}."
+                )
+            except (GeocodificacionError, CoordenadaInvalidaError) as e:
+                self.generar_log(
+                    evento="PEDIDO_RECHAZADO_DIRECCION_INVALIDA",
+                    id_pedido=pedido.id_pedido,
+                    detalles=f"Fallo en geocodificacion para direccion '{pedido.direccion_destino}': {e}"
+                )
+                print(f"[RECHAZADO] No se pudo geocodificar la direccion del pedido '{pedido.id_pedido}': {e}")
+                raise e
 
         self.pedidos.append(pedido)
         print(f"Pedido '{pedido.id_pedido}' (Categoría: {pedido.categoria_requerida}) registrado exitosamente.")
@@ -88,7 +121,8 @@ class SistemaCentroControl:
         drones_desocupados = self.obtener_drones_disponibles()
 
         for dron in drones_desocupados:
-            if dron.categoria == pedido_encontrado.categoria_requerida:
+            categoria_dron = getattr(dron, "categoria", getattr(dron, "modelo_aeronave", None))
+            if categoria_dron == pedido_encontrado.categoria_requerida:
                 pedido_encontrado.vincular_dron(dron)
                 pedido_encontrado.actualizar_estado('ASIGNADO')
 
@@ -99,7 +133,7 @@ class SistemaCentroControl:
                     evento="ASIGNACION_DRON",
                     id_dron=dron.id_dron,
                     id_pedido=pedido_encontrado.id_pedido,
-                    detalles=f"Asignacion exitosa! Dron {dron.id_dron} ({dron.categoria}) enlazado al pedido {pedido_encontrado.id_pedido}."
+                    detalles=f"Asignacion exitosa! Dron {dron.id_dron} ({categoria_dron}) enlazado al pedido {pedido_encontrado.id_pedido}."
                 )
 
                 print(f"El dron {dron.id_dron} ha sido asignado al pedido {pedido_encontrado.id_pedido} exitosamente.")

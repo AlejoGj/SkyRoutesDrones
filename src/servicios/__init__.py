@@ -1,4 +1,14 @@
-"""Módulo de servicios externos (meteorología, APIs no autenticadas)."""
+"""Módulo de servicios externos (meteorología, geocodificación OpenStreetMap)."""
 from src.servicios.clima import ServicioClimaAburra
+from src.servicios.geocodificador import (
+    IServicioGeocodificador,
+    ServicioGeocodificadorLocal,
+    ServicioGeocodificadorOSM,
+)
 
-
+__all__ = [
+    "ServicioClimaAburra",
+    "IServicioGeocodificador",
+    "ServicioGeocodificadorLocal",
+    "ServicioGeocodificadorOSM",
+]
