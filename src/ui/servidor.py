@@ -41,10 +41,9 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
     """
 
     controlador: ControladorSkyRoute
-    candado: threading.Lock
+    candado: threading.RLock
 
     def log_message(self, format: str, *args: Any) -> None:
-        # Silenciar trazas repetitivas de refresco en consola para mantener legibles los logs de dominio
         return
 
     # ==========================================================================
@@ -64,8 +63,10 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
         ruta_limpia = nombre_relativo.lstrip("/") or "index.html"
         ruta_archivo = (DIRECTORIO_ESTATICOS / ruta_limpia).resolve()
 
-        # Protección contra traversal fuera de estaticos/
-        if DIRECTORIO_ESTATICOS.resolve() not in ruta_archivo.parents and ruta_archivo != DIRECTORIO_ESTATICOS.resolve():
+        if (
+            DIRECTORIO_ESTATICOS.resolve() not in ruta_archivo.parents
+            and ruta_archivo != DIRECTORIO_ESTATICOS.resolve()
+        ):
             self._enviar_json({"ok": False, "mensaje": "Acceso denegado."}, HTTPStatus.FORBIDDEN)
             return
 
@@ -98,6 +99,7 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         url = urlparse(self.path)
         ruta = url.path
+        params = parse_qs(url.query)
 
         try:
             if ruta == "/api/estado":
@@ -106,13 +108,17 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
                 self._enviar_json(respuesta)
                 return
 
-            if ruta == "/api/ruta-preview":
-                params = parse_qs(url.query)
-                id_dron = params.get("id_dron", ["DR-02"])[0]
-                lat = float(params.get("lat", ["6.2620"])[0])
-                lon = float(params.get("lon", ["-75.5780"])[0])
+            if ruta == "/api/clima":
+                nodo = params.get("nodo", [None])[0]
                 with self.candado:
-                    respuesta = self.controlador.calcular_preview_ruta(id_dron, lat, lon)
+                    respuesta = self.controlador.consultar_clima_nodo(nodo)
+                self._enviar_json(respuesta)
+                return
+
+            if ruta == "/api/polimorfismo/viabilidad":
+                distancia = float(params.get("distancia_km", ["15.0"])[0])
+                with self.candado:
+                    respuesta = self.controlador.comparar_viabilidad_polimorfica(distancia)
                 self._enviar_json(respuesta)
                 return
 
@@ -137,7 +143,7 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
                     "ok": False,
                     "error_tipo": "FormatoJSONError",
                     "mensaje": "El cuerpo de la petición no es un objeto JSON válido.",
-                    "regla_negocio": "Protocolo de Comunicación",
+                    "regla_negocio": "Protocolo de Comunicación HTTP",
                 },
                 HTTPStatus.BAD_REQUEST,
             )
@@ -145,33 +151,63 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
 
         try:
             with self.candado:
-                if ruta == "/api/sincronizar":
-                    respuesta = self.controlador.sincronizar_flota(
-                        factor_tiempo=float(datos.get("factor_tiempo", 1.0)),
-                        paso_fijo_seg=datos.get("paso_fijo_seg"),
-                        consultar_clima=bool(datos.get("consultar_clima", False)),
+                if ruta == "/api/geocodificar":
+                    respuesta = self.controlador.previsualizar_geocodificacion(
+                        str(datos.get("direccion", ""))
                     )
+                elif ruta == "/api/usuarios":
+                    respuesta = self.controlador.gestionar_usuario(datos)
+                elif ruta == "/api/flota/fabrica":
+                    respuesta = self.controlador.crear_dron_desde_fabrica(datos)
+                elif ruta == "/api/flota/recargar":
+                    respuesta = self.controlador.recargar_bateria_dron(
+                        id_dron=str(datos.get("id_dron", "")),
+                        porcentaje=float(datos.get("porcentaje", 100.0)),
+                    )
+                elif ruta == "/api/flota/telemetria":
+                    respuesta = self.controlador.gestionar_telemetria_dron(datos)
                 elif ruta == "/api/pedidos":
                     respuesta = self.controlador.registrar_nuevo_pedido(datos)
                 elif ruta == "/api/pedidos/asignar":
-                    respuesta = self.controlador.asignar_dron(str(datos.get("id_pedido", "")))
-                elif ruta == "/api/pedidos/despachar":
-                    respuesta = self.controlador.iniciar_vuelo_mision(
-                        id_pedido=str(datos.get("id_pedido", "")),
-                        modo=str(datos.get("modo", "SIMULADO")),
+                    respuesta = self.controlador.asignar_dron_pedido(
+                        str(datos.get("id_pedido", ""))
                     )
-                elif ruta == "/api/drones/retorno":
-                    respuesta = self.controlador.ordenar_retorno_base(str(datos.get("id_dron", "")))
-                elif ruta == "/api/drones/aterrizar":
-                    respuesta = self.controlador.finalizar_retorno_dron(str(datos.get("id_dron", "")))
-                elif ruta == "/api/drones/recargar":
-                    respuesta = self.controlador.recargar_bateria_base(str(datos.get("id_dron", "")))
-                elif ruta == "/api/telemetria":
-                    respuesta = self.controlador.actualizar_telemetria_manual(datos)
-                elif ruta == "/api/usuarios":
-                    respuesta = self.controlador.gestionar_usuario(datos)
+                elif ruta == "/api/pedidos/cancelar":
+                    respuesta = self.controlador.cancelar_pedido(
+                        str(datos.get("id_pedido", ""))
+                    )
+                elif ruta == "/api/misiones/despegar":
+                    respuesta = self.controlador.despegar_mision(
+                        id_pedido=str(datos.get("id_pedido", "")),
+                        modo_despacho=str(datos.get("modo_despacho", "TEMPORAL")),
+                        actualizar_clima=bool(datos.get("actualizar_clima", True)),
+                    )
+                elif ruta == "/api/misiones/retorno":
+                    respuesta = self.controlador.ordenar_retorno_base(
+                        str(datos.get("id_dron", ""))
+                    )
+                elif ruta == "/api/misiones/aterrizar":
+                    respuesta = self.controlador.finalizar_retorno_manual(
+                        str(datos.get("id_dron", ""))
+                    )
+                elif ruta == "/api/simulacion/paso":
+                    respuesta = self.controlador.avanzar_simulacion(
+                        id_dron=datos.get("id_dron") or None,
+                        delta_t=float(datos.get("delta_t", 30.0)),
+                        usar_reloj_real=bool(datos.get("usar_reloj_real", False)),
+                        escala_tiempo=float(datos.get("escala_tiempo", 15.0)),
+                    )
+                elif ruta == "/api/simulacion/reloj":
+                    respuesta = self.controlador.controlar_reloj(
+                        str(datos.get("accion", "reiniciar"))
+                    )
+                elif ruta == "/api/demo/preparar":
+                    respuesta = self.controlador.preparar_tour_guiado()
                 else:
-                    self._enviar_json({"ok": False, "mensaje": f"Ruta no soportada: {ruta}"}, HTTPStatus.NOT_FOUND)
+                    self._enviar_json(
+                        {"ok": False, "mensaje": f"Ruta no soportada: {ruta}"},
+                        HTTPStatus.NOT_FOUND,
+                    )
                     return
 
             self._enviar_json(respuesta, HTTPStatus.OK)
@@ -180,15 +216,19 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
             self._enviar_json(self.controlador.formatear_excepcion(exc), HTTPStatus.BAD_REQUEST)
 
 
-def crear_servidor(host: str = "127.0.0.1", puerto_inicial: int = 8000) -> tuple[ThreadingHTTPServer, int]:
+def crear_servidor(
+    host: str = "127.0.0.1",
+    puerto_inicial: int = 8000,
+    controlador: ControladorSkyRoute | None = None,
+) -> tuple[ThreadingHTTPServer, int]:
     """Crea una instancia de ThreadingHTTPServer buscando automáticamente un puerto libre."""
-    controlador = ControladorSkyRoute()
-    candado = threading.Lock()
+    instancia_ctrl = controlador if controlador is not None else ControladorSkyRoute()
+    candado = threading.RLock()
 
     class ManejadorConfigurado(ManejadorSkyRouteHTTP):
         pass
 
-    ManejadorConfigurado.controlador = controlador
+    ManejadorConfigurado.controlador = instancia_ctrl
     ManejadorConfigurado.candado = candado
 
     for desplazamiento in range(15):
@@ -199,7 +239,9 @@ def crear_servidor(host: str = "127.0.0.1", puerto_inicial: int = 8000) -> tuple
         except OSError:
             continue
 
-    raise RuntimeError(f"No se encontró un puerto disponible entre {puerto_inicial} y {puerto_inicial + 14}.")
+    raise RuntimeError(
+        f"No se encontró un puerto disponible entre {puerto_inicial} y {puerto_inicial + 14}."
+    )
 
 
 def iniciar_aplicacion(
@@ -211,13 +253,13 @@ def iniciar_aplicacion(
     servidor, puerto_real = crear_servidor(host=host, puerto_inicial=puerto)
     url = f"http://{host}:{puerto_real}"
 
-    print("\n" + "=" * 64)
-    print("  SKYROUTES DRONES · INTERFAZ DE GESTIÓN Y TELEMETRÍA")
-    print("  Puente Nativo Python (http.server) · Backend POO Intacto")
-    print("-" * 64)
-    print(f"  Dirección local : {url}")
-    print("  Para detener    : Presiona Ctrl + C en esta terminal")
-    print("=" * 64 + "\n")
+    print("\n" + "=" * 68)
+    print("  SKYROUTE DRONES · TORRE DE CONTROL DE OPERACIONES (VALLE DE ABURRA)")
+    print("  Puente Nativo Python (http.server) · Base Olaya Herrera (6.2196, -75.5868)")
+    print("-" * 68)
+    print(f"  Interfaz Web Local : {url}")
+    print("  Para detener       : Presiona Ctrl + C en esta terminal")
+    print("=" * 68 + "\n")
 
     if abrir_navegador:
         threading.Timer(0.4, lambda: webbrowser.open(url)).start()
