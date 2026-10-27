@@ -126,7 +126,7 @@ class ControladorSkyRoute:
 
     SUGERENCIAS_DIRECCIONES: list[dict[str, str]] = [
         {"etiqueta": "Parque El Poblado", "direccion": "Parque El Poblado"},
-        {"etiqueta": "Universidad de Medellín", "direccion": "Universidad de Medellín"},
+        {"etiqueta": "Universidad de Medellín", "direccion": "Universidad de Medellin"},
         {"etiqueta": "Cra 80 # 30-15, Medellín", "direccion": "Cra 80 # 30-15, Medellín"},
         {"etiqueta": "Parque Berrío", "direccion": "Parque Berrio, Medellin"},
         {"etiqueta": "Centro Comercial Santafé", "direccion": "Centro Comercial Santafe"},
