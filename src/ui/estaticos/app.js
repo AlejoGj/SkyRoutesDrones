@@ -1,885 +1,1361 @@
 /* ==========================================================================
-   SKYROUTES DRONES · CLIENTE INTERACTIVO EN JAVASCRIPT NATIVO (ES6+)
-   Comunica la vista minimalista con el servidor estándar http.server (/api/*)
+   SKYROUTE DRONES · LÓGICA DE INTERFAZ Y PUENTE CON HTTP.SERVER NATIVO (v2)
+   100% acoplada a las entidades reales de Develop · Cero datos hardcodeados
    ========================================================================== */
 
 (() => {
     "use strict";
 
-    const uiState = {
+    const estadoUI = {
         snapshot: null,
-        selectedDroneId: "DR-02",
-        selectedOrderId: "PED-4029",
-        selectedCategory: "BUSQUEDA_RESCATE",
-        inspectMode: "str",
-        speedFactor: 1,
-        autoSyncId: null,
-        syncInFlight: false,
-        routePreview: null,
-        numericCache: {},
-        orderSeq: 4030,
+        vistaActiva: "operaciones",
+        dronCabinaId: "DRON-ENT-01",
+        dronInspectorId: "DRON-ENT-01",
+        modoSimulacion: "paso", // "paso" | "auto"
+        timerAuto: null,
+        modoDestinoPedido: "direccion", // "direccion" | "coordenadas"
+        filtroPedidos: "TODOS",
+        distanciaPolimorfismoKm: 15.0,
+        datosPolimorfismo: null,
+        selectsInicializados: false,
     };
 
     const $ = (id) => document.getElementById(id);
 
-    // ======================================================================
-    // COMUNICACIÓN CON EL PUENTE HTTP NATIVO (/api/*)
-    // ======================================================================
-
-    async function apiGet(path) {
-        const resp = await fetch(path, { headers: { Accept: "application/json" } });
-        const data = await resp.json();
-        if (!resp.ok || data.ok === false) {
-            throw data;
-        }
-        return data;
+    function escaparHtml(valor) {
+        return String(valor ?? "")
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/"/g, "&quot;")
+            .replace(/'/g, "&#39;");
     }
 
-    async function apiPost(path, payload = {}) {
-        const resp = await fetch(path, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Accept: "application/json" },
-            body: JSON.stringify(payload),
-        });
-        const data = await resp.json();
-        if (!resp.ok || data.ok === false) {
-            throw data;
+    function clasePildoraEstado(estado) {
+        const clave = String(estado || "").toUpperCase();
+        if (["DISPONIBLE", "COMPLETADO", "LLEGADA_A_BASE", "MISION_COMPLETADA"].includes(clave)) {
+            return "pill-ok";
         }
-        return data;
+        if (["EN_MISION", "EN_TRANSITO", "EN_VUELO", "HACIA_DESTINO", "LLEGADA_A_DESTINO", "DESPEGUE_EXITOSO"].includes(clave)) {
+            return "pill-active";
+        }
+        if (["ASIGNADO", "RESERVADO", "RETORNANDO_A_BASE", "PENDIENTE"].includes(clave)) {
+            return "pill-warn";
+        }
+        if (["SIN_BATERIA", "BATERIA_AGOTADA", "CANCELADO", "EMERGENCIA_BATERIA"].includes(clave)) {
+            return "pill-danger";
+        }
+        return "";
     }
 
-    // ======================================================================
-    // ANIMACIÓN DE VALORES NUMÉRICOS
-    // ======================================================================
-
-    function animarNumero(elementId, valorObjetivo, decimales = 1) {
-        const el = $(elementId);
-        if (!el) return;
-
-        const destino = Number(valorObjetivo) || 0;
-        const inicio = uiState.numericCache[elementId] ?? destino;
-        uiState.numericCache[elementId] = destino;
-
-        if (Math.abs(destino - inicio) < 0.01) {
-            el.textContent = destino.toFixed(decimales);
-            return;
-        }
-
-        const duracionMs = 300;
-        const t0 = performance.now();
-
-        function frame(ahora) {
-            const p = Math.min(1, (ahora - t0) / duracionMs);
-            const ease = 1 - Math.pow(1 - p, 3);
-            const actual = inicio + (destino - inicio) * ease;
-            el.textContent = actual.toFixed(decimales);
-            if (p < 1) {
-                requestAnimationFrame(frame);
-            }
-        }
-        requestAnimationFrame(frame);
+    function barraBateriaMiniHtml(porcentaje) {
+        const pct = Math.max(0, Math.min(100, Number(porcentaje) || 0));
+        const mod = pct <= 20 ? "bat-low" : pct <= 50 ? "bat-mid" : "";
+        return `
+            <span class="mini-bat">
+                <span class="mini-bat-track">
+                    <span class="mini-bat-fill ${mod}" style="width: ${pct.toFixed(1)}%;"></span>
+                </span>
+                <span>${pct.toFixed(1)}%</span>
+            </span>
+        `;
     }
 
-    // ======================================================================
-    // MANEJO DEL BANNER DE EXCEPCIONES DE DOMINIO (RF-02)
-    // ======================================================================
+    // ==========================================================================
+    // COMUNICACIÓN HTTP Y NOTIFICACIONES DE DOMINIO
+    // ==========================================================================
 
-    function mostrarExcepcionDominio(err) {
-        const banner = $("domainBanner");
-        const nominal = $("bannerNominal");
-        const errorBox = $("bannerError");
+    function mostrarNotificacion({ tipo = "info", insignia = "SISTEMA", titulo = "", mensaje = "" }) {
+        const banner = $("feedbackBanner");
+        banner.classList.remove("is-hidden", "is-error", "is-success");
+        if (tipo === "error") banner.classList.add("is-error");
+        if (tipo === "success") banner.classList.add("is-success");
 
-        const tipo = err?.error_tipo || "ExcepcionDominio";
-        const mensaje = err?.mensaje || "Operación rechazada por validación de reglas de negocio.";
-        const regla = err?.regla_negocio || "Validación de Dominio";
-
-        $("errorTypeChip").textContent = tipo;
-        $("errorDetailText").textContent = `— ${mensaje}`;
-        $("errorRuleLabel").textContent = regla;
-
-        nominal.classList.add("is-hidden");
-        errorBox.classList.remove("is-hidden");
-        banner.classList.remove("has-error");
-        void banner.offsetWidth; // Reinicia animación CSS
-        banner.classList.add("has-error");
+        $("feedbackBadge").textContent = insignia;
+        $("feedbackTitle").textContent = titulo;
+        $("feedbackMessage").textContent = mensaje;
     }
 
-    function limpiarExcepcionDominio(mensajeNominal = null) {
-        const banner = $("domainBanner");
-        $("bannerError").classList.add("is-hidden");
-        $("bannerNominal").classList.remove("is-hidden");
-        banner.classList.remove("has-error");
-        if (mensajeNominal) {
-            $("operationToastText").textContent = mensajeNominal;
-        }
-    }
-
-    // ======================================================================
-    // OBTENCIÓN DE ENTIDADES SELECCIONADAS
-    // ======================================================================
-
-    function obtenerDronSeleccionado() {
-        const flota = uiState.snapshot?.flota || [];
-        return flota.find((d) => d.id_dron === uiState.selectedDroneId) || flota[0] || null;
-    }
-
-    function obtenerPedidoSeleccionado() {
-        const pedidos = uiState.snapshot?.pedidos || [];
-        return pedidos.find((p) => p.id_pedido === uiState.selectedOrderId) || pedidos[0] || null;
-    }
-
-    function formatearTupla(coords) {
-        if (!Array.isArray(coords) || coords.length < 2) return "(6.2089, -75.5684)";
-        return `(${Number(coords[0]).toFixed(4)}, ${Number(coords[1]).toFixed(4)})`;
-    }
-
-    // ======================================================================
-    // RENDERIZADO DE LA VISTA COMPLETA
-    // ======================================================================
-
-    function renderizarTodo(datos) {
-        uiState.snapshot = datos;
-
-        if (datos.dron_enfocado_id) {
-            uiState.selectedDroneId = datos.dron_enfocado_id;
-        }
-        if (datos.pedido_creado_id) {
-            uiState.selectedOrderId = datos.pedido_creado_id;
-        }
-        if (datos.mensaje_operacion) {
-            limpiarExcepcionDominio(datos.mensaje_operacion);
-        }
-
-        renderizarEncabezado(datos);
-        renderizarTiraFlota(datos.flota || []);
-        renderizarMonitoreoDron();
-        renderizarCrucePedidos(datos.pedidos || []);
-        renderizarNavegacionYRuta();
-        renderizarRetornoBase();
-        renderizarBitacora(datos.logs || []);
-        renderizarModalUsuarios(datos.usuarios || [], datos.usuario_activo);
-    }
-
-    function renderizarEncabezado(datos) {
-        const usr = datos.usuario_activo;
-        if (usr) {
-            $("activeUserName").textContent = usr.nombre;
-            $("activeUserRole").textContent = `Rol: ${usr.rol}`;
-        }
-        $("lastSyncTime").textContent = (datos.ultima_sincronizacion || datos.timestamp || "").slice(0, 5);
-
-        const clima = datos.clima;
-        if (clima) {
-            $("climateText").textContent = `${Number(clima.temperatura_c).toFixed(1)} °C · Viento ${Number(clima.viento_kmh).toFixed(1)} km/h`;
-        }
-    }
-
-    function renderizarTiraFlota(flota) {
-        const contenedor = $("fleetStrip");
-        contenedor.innerHTML = "";
-
-        const etiquetasCortas = {
-            ENTREGA_LIGERA: "Entrega",
-            CARGA_PESADA: "Carga",
-            VIGILANCIA: "Vigilancia",
-            MAPEO_TOPOGRAFICO: "Mapeo",
-            INSPECCION_INFRAESTRUCTURA: "Inspección",
-            BUSQUEDA_RESCATE: "Rescate",
+    async function peticionAPI(ruta, opciones = {}) {
+        const config = {
+            method: opciones.metodo || "GET",
+            headers: { "Content-Type": "application/json" },
         };
+        if (opciones.cuerpo !== undefined) {
+            config.body = JSON.stringify(opciones.cuerpo);
+        }
 
-        flota.forEach((dron) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            btn.className = `fleet-pill${dron.id_dron === uiState.selectedDroneId ? " is-selected" : ""}`;
+        const resp = await fetch(ruta, config);
+        const payload = await resp.json();
 
-            let dotClass = "dot-disponible";
-            if (dron.estado_operacional === "EN_MISION") dotClass = "dot-vuelo";
-            else if (dron.estado_operacional === "RETORNANDO_A_BASE") dotClass = "dot-retorno";
-            else if (dron.estado_operacional === "RESERVADO") dotClass = "dot-reservado";
-
-            btn.innerHTML = `
-                <div class="fleet-pill-left">
-                    <span class="fleet-pill-id">
-                        <span class="status-dot ${dotClass}"></span>
-                        ${dron.id_dron}
-                    </span>
-                    <span class="fleet-pill-cat">${etiquetasCortas[dron.categoria] || dron.categoria}</span>
-                </div>
-                <span class="fleet-pill-bat">${dron.bateria.toFixed(0)}%</span>
-            `;
-
-            btn.addEventListener("click", () => {
-                uiState.selectedDroneId = dron.id_dron;
-                if (dron.pedido_activo_id) {
-                    uiState.selectedOrderId = dron.pedido_activo_id;
-                }
-                actualizarPreviewRutaSilencioso();
-                renderizarTodo(uiState.snapshot);
+        if (!resp.ok || payload.ok === false) {
+            mostrarNotificacion({
+                tipo: "error",
+                insignia: payload.regla_negocio || payload.error_tipo || "EXCEPCIÓN DE DOMINIO",
+                titulo: payload.error_tipo || "Operación rechazada por validación",
+                mensaje: payload.mensaje || "No fue posible procesar la solicitud.",
             });
-
-            contenedor.appendChild(btn);
-        });
+            const err = new Error(payload.mensaje || "Error en petición HTTP");
+            err.payload = payload;
+            throw err;
+        }
+        return payload;
     }
 
-    function renderizarMonitoreoDron() {
-        const dron = obtenerDronSeleccionado();
-        if (!dron) return;
+    function aplicarSnapshot(snapshot, mostrarMensaje = true) {
+        estadoUI.snapshot = snapshot;
 
-        const catCorta = dron.categoria_etiqueta.toUpperCase();
-        $("droneMonitorTitle").textContent = `${dron.id_dron} · ${catCorta}`;
-        $("droneMonitorSubmeta").textContent = `${dron.modelo_aeronave} · Subclase ${dron.clase_python}`;
-
-        animarNumero("telemetryBattery", dron.bateria, 1);
-        animarNumero("telemetryAltitude", dron.altitud, 1);
-
-        const batFill = $("batteryBarFill");
-        batFill.style.width = `${Math.max(0, Math.min(100, dron.bateria))}%`;
-        batFill.classList.toggle("is-low", dron.bateria < 20);
-        batFill.classList.toggle("is-warn", dron.bateria >= 20 && dron.bateria < 45);
-
-        const btnRecarga = $("btnRechargeDrone");
-        const puedeRecargar = dron.disponible && !dron.en_mision && !dron.retornando_a_base && dron.bateria < 99.9;
-        btnRecarga.classList.toggle("is-hidden", !puedeRecargar);
-
-        $("telemetryMotors").textContent = `'${dron.estado_motores}'`;
-        $("telemetryCoords").textContent = formatearTupla(dron.coordenadas);
-        $("telemetryOdometer").textContent = `${dron.kilometraje_total_km.toFixed(2)} km · ${dron.consumo_10km_pct.toFixed(1)}% / 10 km`;
-
-        // Atributos propios de la subclase
-        const specsGrid = $("subclassSpecsGrid");
-        specsGrid.innerHTML = (dron.especificaciones || [])
-            .map(
-                (sp) => `
-                <div class="spec-mini-box">
-                    <small>${sp.etiqueta}</small>
-                    <strong>${sp.valor}</strong>
-                </div>
-            `
-            )
-            .join("");
-
-        // Inspección técnica (__str__, __repr__, inspeccionar_sistemas_especializados)
-        const salida = $("entityInspectionOutput");
-        const pie = $("inspectionFooterNote");
-        if (uiState.inspectMode === "repr") {
-            salida.textContent = dron.ficha_repr;
-            pie.textContent = `Método dunder __repr__ heredado y sobrescrito en ${dron.clase_python}`;
-        } else if (uiState.inspectMode === "sistemas") {
-            salida.textContent = dron.diagnostico_sistemas;
-            pie.textContent = `Método abstracto @abstractmethod inspeccionar_sistemas_especializados()`;
+        if (snapshot.dron_enfocado_id) {
+            estadoUI.dronCabinaId = snapshot.dron_enfocado_id;
+            estadoUI.dronInspectorId = snapshot.dron_enfocado_id;
         } else {
-            salida.textContent = dron.ficha_str;
-            pie.textContent = `Método dunder __str__ polimórfico en ${dron.clase_python}`;
+            // Si algún dron está volando y el actual está en tierra sin sesión, priorizar el activo
+            const dronActual = snapshot.flota.find((d) => d.id_dron === estadoUI.dronCabinaId);
+            const dronVolando = snapshot.flota.find((d) => d.en_vuelo_activo);
+            if ((!dronActual || (!dronActual.en_vuelo_activo && !snapshot.sesiones_vuelo[dronActual.id_dron])) && dronVolando) {
+                estadoUI.dronCabinaId = dronVolando.id_dron;
+            }
+        }
+
+        if (!estadoUI.selectsInicializados) {
+            inicializarSelectoresEstaticos(snapshot);
+            estadoUI.selectsInicializados = true;
+        }
+
+        renderizarBarraGlobal(snapshot);
+        renderizarCabinaOperaciones(snapshot);
+        renderizarFlotaEInspector(snapshot);
+        renderizarDespachoYUsuarios(snapshot);
+        renderizarBitacora(snapshot);
+
+        if (estadoUI.vistaActiva === "polimorfismo") {
+            cargarComparativaPolimorfica(estadoUI.distanciaPolimorfismoKm, false);
+        }
+
+        if (mostrarMensaje && snapshot.mensaje_operacion) {
+            mostrarNotificacion({
+                tipo: "success",
+                insignia: "OPERACIÓN CONFIRMADA",
+                titulo: "Estado actualizado en el Centro de Control",
+                mensaje: snapshot.mensaje_operacion,
+            });
         }
     }
 
-    function renderizarCrucePedidos(pedidos) {
-        const selector = $("selectActiveOrder");
-        if (pedidos.length === 0) {
-            selector.innerHTML = `<option value="">Sin pedidos registrados</option>`;
+    // ==========================================================================
+    // NAVEGACIÓN ENTRE ESPACIOS DE TRABAJO
+    // ==========================================================================
+
+    function cambiarVista(nombreVista) {
+        estadoUI.vistaActiva = nombreVista;
+        document.querySelectorAll(".workspace-tab").forEach((btn) => {
+            btn.classList.toggle("is-active", btn.dataset.view === nombreVista);
+        });
+        document.querySelectorAll(".workspace-view").forEach((sec) => {
+            sec.classList.toggle("is-active", sec.id === `view-${nombreVista}`);
+        });
+
+        if (nombreVista === "polimorfismo") {
+            cargarComparativaPolimorfica(estadoUI.distanciaPolimorfismoKm, false);
+        }
+    }
+
+    // ==========================================================================
+    // INICIALIZACIÓN DE SELECTORES Y BARRA SUPERIOR GLOBAL
+    // ==========================================================================
+
+    function inicializarSelectoresEstaticos(snapshot) {
+        // Nodos climáticos del Valle de Aburrá
+        const selClima = $("selectNodoClima");
+        selClima.innerHTML = snapshot.nodos_clima
+            .map((nodo) => `<option value="${escaparHtml(nodo)}">${escaparHtml(nodo.replace(/_/g, " "))}</option>`)
+            .join("");
+        selClima.value = snapshot.clima.nodo || "El_Poblado";
+
+        // Categorías de pedidos
+        const selCatPedido = $("pedCategoria");
+        selCatPedido.innerHTML = snapshot.categorias_permitidas
+            .map(
+                (cat) =>
+                    `<option value="${escaparHtml(cat)}">${escaparHtml(snapshot.etiquetas_categoria[cat] || cat)} (${escaparHtml(cat)})</option>`
+            )
+            .join("");
+
+        // Categorías de fábrica de drones
+        const selCatFabrica = $("fabCategoria");
+        selCatFabrica.innerHTML = snapshot.categorias_fabrica
+            .map(
+                (cat) =>
+                    `<option value="${escaparHtml(cat)}">${escaparHtml(snapshot.etiquetas_categoria[cat] || cat)} · ${escaparHtml(snapshot.esquema_fabrica[cat]?.clase || cat)}</option>`
+            )
+            .join("");
+        renderizarCamposDinamicosFabrica(selCatFabrica.value);
+
+        // Chips de sugerencias viales rápidas
+        const contSug = $("addressSuggestions");
+        contSug.innerHTML = snapshot.sugerencias_direcciones
+            .map(
+                (item) =>
+                    `<button type="button" class="chip-btn" data-dir-sugerida="${escaparHtml(item.direccion)}">${escaparHtml(item.etiqueta)}</button>`
+            )
+            .join("");
+    }
+
+    function renderizarBarraGlobal(snapshot) {
+        const [latB, lonB] = snapshot.coordenadas_base;
+        $("baseCoordsBadge").textContent = `Base Olaya Herrera · ${latB.toFixed(4)}, ${lonB.toFixed(4)}`;
+
+        // Clima
+        const clima = snapshot.clima;
+        if ($("selectNodoClima").value !== clima.nodo) {
+            $("selectNodoClima").value = clima.nodo;
+        }
+        $("climateReadout").textContent =
+            `${Number(clima.temperatura_c).toFixed(1)} C · ${Number(clima.viento_kmh).toFixed(1)} km/h · ${(Number(clima.factor_velocidad) * 100).toFixed(0)}%`;
+        const dotClima = $("climateSafetyDot");
+        dotClima.className = `status-dot ${clima.vuelo_seguro ? "status-online" : "status-alert"}`;
+        dotClima.title = clima.vuelo_seguro
+            ? "Condiciones atmosféricas seguras para despegue"
+            : "Alerta meteorológica activa";
+
+        // Usuario activo
+        $("topActiveUserName").textContent = snapshot.usuario_activo.nombre;
+        $("topActiveUserRole").textContent = `${snapshot.usuario_activo.rol} · ${snapshot.usuario_activo.id_usuario}`;
+
+        // Contadores de pestañas y KPIs
+        const m = snapshot.metricas;
+        const misionesActivas = m.pedidos_pendientes + m.pedidos_asignados + m.en_aire;
+        $("badgeOperaciones").textContent = String(misionesActivas);
+        $("badgeFlota").textContent = `${m.disponibles}/${m.total_flota}`;
+        $("badgeDespacho").textContent = String(m.total_pedidos);
+        $("badgeBitacora").textContent = String(m.total_logs);
+
+        $("kpiDisponibles").textContent = String(m.disponibles);
+        $("kpiEnVuelo").textContent = String(m.en_aire);
+        $("kpiCompletados").textContent = String(m.pedidos_completados);
+        $("kpiRelojSistema").textContent = `${Math.round(snapshot.reloj.tiempo_total_seg)}s`;
+    }
+
+    // ==========================================================================
+    // ESPACIO 1: OPERACIONES, INDICADOR LINEAL Y SIMULACIÓN TEMPORAL
+    // ==========================================================================
+
+    function renderizarCabinaOperaciones(snapshot) {
+        // 1. Cola operativa de misiones PENDIENTE y ASIGNADO
+        const cola = snapshot.pedidos.filter((p) => ["PENDIENTE", "ASIGNADO", "EN_TRANSITO"].includes(p.estado));
+        const contCola = $("opsQueueList");
+
+        if (cola.length === 0) {
+            contCola.innerHTML = `
+                <div class="empty-state-box">
+                    <p>No hay misiones pendientes ni en tránsito en este momento.</p>
+                    <div class="queue-actions" style="justify-content: center;">
+                        <button type="button" class="btn-secondary btn-sm" data-ir-vista="despacho">Crear Pedido</button>
+                        <button type="button" class="btn-primary btn-sm" data-accion-tour="1">Ejecutar Tour E2E</button>
+                    </div>
+                </div>
+            `;
+        } else {
+            contCola.innerHTML = cola
+                .map((p) => {
+                    const destinoTxt = p.direccion_destino || `(${p.coordenada_destino[0].toFixed(4)}, ${p.coordenada_destino[1].toFixed(4)})`;
+                    let botones = "";
+                    if (p.estado === "PENDIENTE") {
+                        botones = `
+                            <button type="button" class="btn-primary btn-sm" data-asignar-pedido="${escaparHtml(p.id_pedido)}">
+                                Asignar Dron Compatible
+                            </button>
+                            <button type="button" class="btn-ghost btn-sm" data-cancelar-pedido="${escaparHtml(p.id_pedido)}">
+                                Cancelar
+                            </button>
+                        `;
+                    } else if (p.estado === "ASIGNADO") {
+                        botones = `
+                            <button type="button" class="btn-primary btn-sm" data-despegar-pedido="${escaparHtml(p.id_pedido)}" data-modo-desp="TEMPORAL">
+                                Autorizar Despegue
+                            </button>
+                            <button type="button" class="btn-secondary btn-sm" data-despegar-pedido="${escaparHtml(p.id_pedido)}" data-modo-desp="INSTANTANEO" title="Ejecutar despachar_mision() síncrono">
+                                Instantáneo
+                            </button>
+                        `;
+                    } else if (p.estado === "EN_TRANSITO" && p.dron_asignado_id) {
+                        botones = `
+                            <button type="button" class="btn-secondary btn-sm" data-enfocar-cabina="${escaparHtml(p.dron_asignado_id)}">
+                                Monitorear en Cabina
+                            </button>
+                        `;
+                    }
+
+                    return `
+                        <div class="queue-item">
+                            <div class="queue-top">
+                                <span class="queue-id">${escaparHtml(p.id_pedido)}</span>
+                                <span class="status-pill ${clasePildoraEstado(p.estado)}">${escaparHtml(p.estado)}</span>
+                            </div>
+                            <div class="queue-dest">${escaparHtml(destinoTxt)}</div>
+                            <div class="queue-meta">
+                                ${escaparHtml(p.categoria_etiqueta)} · Ida+Vuelta: ${p.distancia_ida_vuelta_km.toFixed(2)} km
+                                ${p.dron_asignado_id ? ` · Dron: ${escaparHtml(p.dron_asignado_id)}` : ""}
+                            </div>
+                            <div class="queue-actions">${botones}</div>
+                        </div>
+                    `;
+                })
+                .join("");
+        }
+
+        // 2. Selector lateral de aeronaves en cabina
+        $("opsActiveCountLabel").textContent = `${snapshot.metricas.en_aire} en vuelo`;
+        $("opsDroneSelectorList").innerHTML = snapshot.flota
+            .map((d) => {
+                const seleccionado = d.id_dron === estadoUI.dronCabinaId ? "is-selected" : "";
+                return `
+                    <button type="button" class="drone-mini-item ${seleccionado}" data-enfocar-cabina="${escaparHtml(d.id_dron)}">
+                        <div class="drone-mini-left">
+                            <strong>${escaparHtml(d.id_dron)}</strong>
+                            <small>${escaparHtml(d.modelo_aeronave)} · ${escaparHtml(d.categoria_etiqueta)}</small>
+                        </div>
+                        <div class="drone-mini-right">
+                            <div>${d.bateria.toFixed(1)}%</div>
+                            <small>${escaparHtml(d.estado_operacional.replace(/_/g, " "))}</small>
+                        </div>
+                    </button>
+                `;
+            })
+            .join("");
+
+        // 3. Cabina principal del dron enfocado
+        const dron = snapshot.flota.find((d) => d.id_dron === estadoUI.dronCabinaId) || snapshot.flota[0];
+        if (!dron) return;
+
+        const sesion = snapshot.sesiones_vuelo[dron.id_dron] || null;
+        const progreso = dron.progreso_lineal || { fase_ciclo: "EN_PLATAFORMA", progreso_ciclo_pct: 0, etapa_actual: 0 };
+
+        $("simEyebrow").textContent = `${dron.clase_python} · ${dron.categoria_etiqueta}`;
+        const pill = $("simStatusPill");
+        pill.textContent = dron.etiqueta_estado;
+        pill.className = `status-pill ${clasePildoraEstado(dron.estado_operacional)}`;
+
+        if (sesion) {
+            $("simTitle").textContent = `${dron.id_dron} (${dron.modelo_aeronave}) · Misión ${sesion.id_pedido}`;
+            $("simSubtitle").textContent =
+                `Destino: ${sesion.direccion_destino} (${sesion.coordenadas_destino[0].toFixed(4)}, ${sesion.coordenadas_destino[1].toFixed(4)}) · ` +
+                `Ida: ${Number(sesion.distancia_ida_total_km).toFixed(2)} km · Retorno: ${Number(sesion.distancia_retorno_total_km).toFixed(2)} km`;
+        } else {
+            $("simTitle").textContent = `${dron.id_dron} · ${dron.modelo_aeronave}`;
+            $("simSubtitle").textContent =
+                `Estacionado en Aeropuerto Olaya Herrera · Consumo polimórfico: ${dron.tasa_consumo_bat_km.toFixed(2)}% bat/km · Asigna y despega un pedido para simular.`;
+        }
+
+        $("simStatBateria").textContent = `${dron.bateria.toFixed(1)}%`;
+        $("simStatAltitud").textContent = `${dron.altitud.toFixed(1)} m`;
+        $("simStatVelocidad").textContent = `${dron.velocidad_efectiva_kmh.toFixed(1)} km/h`;
+        $("simStatOdometro").textContent = `${dron.kilometraje_total_km.toFixed(2)} km`;
+
+        // 4. Indicador Lineal Minimalista (Base -> Destino -> Retorno)
+        const pct = Math.max(0, Math.min(100, Number(progreso.progreso_ciclo_pct) || 0));
+        const emergencia = progreso.fase_ciclo === "EMERGENCIA_BATERIA" || dron.bateria <= 0;
+
+        $("linearJourneyBox").classList.toggle("is-emergency", emergencia);
+        $("journeyFill").style.width = `${pct}%`;
+        $("journeyMarker").style.left = `${pct}%`;
+
+        const nodoBase = $("stageNodeBase");
+        const nodoDest = $("stageNodeDestino");
+        const nodoRet = $("stageNodeRetorno");
+        [nodoBase, nodoDest, nodoRet].forEach((n) => n.classList.remove("is-done", "is-current", "is-danger"));
+
+        if (emergencia) {
+            nodoBase.classList.add("is-done");
+            if (pct < 50) {
+                nodoDest.classList.add("is-danger");
+            } else {
+                nodoDest.classList.add("is-done");
+                nodoRet.classList.add("is-danger");
+            }
+        } else if (progreso.etapa_actual === 0) {
+            nodoBase.classList.add("is-current");
+        } else if (progreso.etapa_actual === 1) {
+            nodoBase.classList.add("is-done");
+            nodoDest.classList.add("is-current");
+        } else if (progreso.etapa_actual === 2) {
+            nodoBase.classList.add("is-done");
+            nodoDest.classList.add("is-done");
+            nodoRet.classList.add("is-current");
+        } else if (progreso.etapa_actual >= 3) {
+            nodoBase.classList.add("is-done");
+            nodoDest.classList.add("is-done");
+            nodoRet.classList.add("is-done");
+        }
+
+        $("stageBaseCoords").textContent = `(${snapshot.coordenadas_base[0].toFixed(4)}, ${snapshot.coordenadas_base[1].toFixed(4)})`;
+        if (sesion) {
+            $("stageDestName").textContent = sesion.direccion_destino;
+            $("stageDestMeta").textContent = progressDestSubtitle(sesion, progreso);
+            $("stageReturnTitle").textContent = emergencia ? "Aterrizaje Forzoso (0.0%)" : "Retorno a Olaya Herrera";
+            $("stageReturnMeta").textContent = emergencia
+                ? `Interrumpido en (${dron.coordenadas[0].toFixed(4)}, ${dron.coordenadas[1].toFixed(4)})`
+                : progreso.etapa_actual >= 3
+                    ? "Completado · STANDBY · Disponible"
+                    : `Tramo retorno: ${Number(sesion.distancia_retorno_total_km).toFixed(2)} km`;
+        } else {
+            $("stageDestName").textContent = "Sin destino activo";
+            $("stageDestMeta").textContent = "Esperando asignación de pedido";
+            $("stageReturnTitle").textContent = "Retorno a Plataforma";
+            $("stageReturnMeta").textContent = "Motores en STANDBY";
+        }
+
+        $("simLiveGps").textContent = `(${dron.coordenadas[0].toFixed(5)}, ${dron.coordenadas[1].toFixed(5)})`;
+        $("simLiveInstrument").textContent = sesion?.instrumental_activado || (dron.en_vuelo_activo ? "ACTIVO" : "EN ESPERA");
+        $("simLiveRemaining").textContent = `${dron.distancia_objetivo_km.toFixed(2)} km`;
+        $("simLiveElapsed").textContent = `${Number(sesion?.tiempo_acumulado_seg || 0).toFixed(1)} s`;
+
+        // Habilitación de controles reales según estado físico de la aeronave
+        const hayAlgunoEnVuelo = snapshot.flota.some((d) => d.en_vuelo_activo);
+        $("btnAvanzarPulso").disabled = !dron.en_vuelo_activo && !hayAlgunoEnVuelo;
+        document.querySelectorAll("[data-quick-delta]").forEach((b) => {
+            b.disabled = !dron.en_vuelo_activo && !hayAlgunoEnVuelo;
+        });
+        $("btnOrdenarRetorno").disabled = !(dron.en_mision && dron.pedido_activo_id);
+        $("btnAterrizarManual").classList.toggle("is-hidden", !dron.puede_aterrizar_manual);
+
+        // Si estaba corriendo el reloj automático y ya no queda ningún dron en vuelo, detenerlo limpiamente
+        if (estadoUI.timerAuto && !hayAlgunoEnVuelo) {
+            detenerAutoSimulacion();
+        }
+
+        // 5. Tarjeta de Certificación Final
+        const certBox = $("missionCertCard");
+        if (sesion && sesion.certificacion_final && !dron.en_vuelo_activo) {
+            const c = sesion.certificacion_final;
+            certBox.classList.remove("is-hidden");
+            certBox.classList.toggle("is-emergency", c.resultado === "EMERGENCIA_BATERIA");
+            certBox.innerHTML = `
+                <h4>${escaparHtml(c.titulo)}</h4>
+                <div class="cert-grid">
+                    <div><span>Tiempo Operación</span><strong>${c.tiempo_total_min} min (${c.tiempo_total_seg} s)</strong></div>
+                    <div><span>Batería Remanente</span><strong>${c.bateria_final_pct.toFixed(1)}%</strong></div>
+                    <div><span>Odómetro Acumulado</span><strong>${c.odometro_total_km.toFixed(2)} km</strong></div>
+                    <div><span>Disponibilidad Dron</span><strong>${escaparHtml(c.disponibilidad_dron)}</strong></div>
+                    <div><span>Estado del Pedido</span><strong>${escaparHtml(c.estado_pedido)}</strong></div>
+                </div>
+            `;
+        } else {
+            certBox.classList.add("is-hidden");
+            certBox.innerHTML = "";
+        }
+
+        // 6. Tabla Cronológica de Pulsos
+        const pulsos = sesion?.pulsos || [];
+        $("pulseCountLabel").textContent = `${pulsos.length} ${pulsos.length === 1 ? "pulso registrado" : "pulsos registrados"}`;
+        const tbody = $("pulseTableBody");
+
+        if (pulsos.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="7" class="empty-cell">
+                        ${
+                            dron.en_vuelo_activo
+                                ? "Aeronave en el aire a 30 m. Usa 'Avanzar Pulso' o 'Automática Animada' para integrar el movimiento."
+                                : "Aún no hay pulsos temporales para esta aeronave. Registra/asigna un pedido y autoriza el despegue."
+                        }
+                    </td>
+                </tr>
+            `;
+        } else {
+            tbody.innerHTML = [...pulsos]
+                .reverse()
+                .map((p) => {
+                    const claseFila =
+                        p.estado === "BATERIA_AGOTADA"
+                            ? "row-danger"
+                            : ["LLEGADA_A_DESTINO", "LLEGADA_A_BASE"].includes(p.estado)
+                                ? "row-highlight"
+                                : "";
+                    return `
+                        <tr class="${claseFila}">
+                            <td>${Number(p.t_seg).toFixed(0)} s <small>(+${Number(p.delta_t_seg).toFixed(0)}s)</small></td>
+                            <td>${escaparHtml(p.fase)}</td>
+                            <td>(${p.coordenadas[0].toFixed(4)}, ${p.coordenadas[1].toFixed(4)})</td>
+                            <td>+${Number(p.delta_km).toFixed(2)} km</td>
+                            <td>${Number(p.distancia_restante_km).toFixed(2)} km</td>
+                            <td>${barraBateriaMiniHtml(p.bateria_pct)}</td>
+                            <td><span class="status-pill ${clasePildoraEstado(p.estado)}">${escaparHtml(p.estado)}</span></td>
+                        </tr>
+                    `;
+                })
+                .join("");
+        }
+    }
+
+    function progressDestSubtitle(sesion, progreso) {
+        if (progreso.abortado) {
+            return "Misión abortada (RF-09)";
+        }
+        if (progreso.etapa_actual >= 2) {
+            return `Entregado · (${sesion.coordenadas_destino[0].toFixed(4)}, ${sesion.coordenadas_destino[1].toFixed(4)})`;
+        }
+        return `(${sesion.coordenadas_destino[0].toFixed(4)}, ${sesion.coordenadas_destino[1].toFixed(4)}) · ${Number(sesion.distancia_ida_total_km).toFixed(2)} km`;
+    }
+
+    // ==========================================================================
+    // CONTROL DEL SIMULADOR TEMPORAL (PASO A PASO Y AUTOMÁTICO)
+    // ==========================================================================
+
+    function cambiarModoSimulacion(modo) {
+        estadoUI.modoSimulacion = modo;
+        $("btnModePaso").classList.toggle("is-active", modo === "paso");
+        $("btnModeAuto").classList.toggle("is-active", modo === "auto");
+        $("controlsPasoAPaso").classList.toggle("is-hidden", modo !== "paso");
+        $("controlsAutomatico").classList.toggle("is-hidden", modo !== "auto");
+        if (modo === "paso" && estadoUI.timerAuto) {
+            detenerAutoSimulacion();
+        }
+    }
+
+    async function ejecutarPulsoSimulacion(deltaSeg, silencioso = false) {
+        const snapshot = estadoUI.snapshot;
+        if (!snapshot) return;
+
+        const dronActual = snapshot.flota.find((d) => d.id_dron === estadoUI.dronCabinaId);
+        const idObjetivo = dronActual && dronActual.en_vuelo_activo ? dronActual.id_dron : null;
+
+        try {
+            const nuevoEstado = await peticionAPI("/api/simulacion/paso", {
+                metodo: "POST",
+                cuerpo: {
+                    id_dron: idObjetivo,
+                    delta_t: Number(deltaSeg) || 30,
+                    usar_reloj_real: false,
+                },
+            });
+            aplicarSnapshot(nuevoEstado, !silencioso || Boolean(nuevoEstado.mensaje_operacion));
+        } catch (_e) {
+            if (estadoUI.timerAuto) detenerAutoSimulacion();
+        }
+    }
+
+    function iniciarAutoSimulacion() {
+        if (estadoUI.timerAuto) return;
+        $("labelToggleAutoPlay").textContent = "Pausar Reloj Continuo";
+        const ciclo = async () => {
+            const salto = Number($("selectAutoDelta").value) || 25;
+            await ejecutarPulsoSimulacion(salto, true);
+        };
+        ciclo();
+        estadoUI.timerAuto = window.setInterval(ciclo, 620);
+    }
+
+    function detenerAutoSimulacion() {
+        if (estadoUI.timerAuto) {
+            window.clearInterval(estadoUI.timerAuto);
+            estadoUI.timerAuto = null;
+        }
+        $("labelToggleAutoPlay").textContent = "Iniciar Reloj Continuo";
+    }
+
+    // ==========================================================================
+    // ESPACIO 2: FLOTA ACTIVA, INSPECTOR Y FÁBRICA DINÁMICA
+    // ==========================================================================
+
+    function renderizarFlotaEInspector(snapshot) {
+        const grid = $("fleetCardsGrid");
+        grid.innerHTML = snapshot.flota
+            .map((d) => {
+                const sel = d.id_dron === estadoUI.dronInspectorId ? "is-selected" : "";
+                const specsHtml = d.especificaciones
+                    .map((s) => `<span class="spec-chip">${escaparHtml(s.etiqueta)}: <strong>${escaparHtml(s.valor)}</strong></span>`)
+                    .join("");
+                return `
+                    <div class="drone-card ${sel}" data-inspeccionar-dron="${escaparHtml(d.id_dron)}">
+                        <div class="drone-card-head">
+                            <div>
+                                <strong>${escaparHtml(d.id_dron)}</strong>
+                                <small>${escaparHtml(d.modelo_aeronave)} · ${escaparHtml(d.clase_python)}</small>
+                            </div>
+                            <span class="status-pill ${clasePildoraEstado(d.estado_operacional)}">
+                                ${escaparHtml(d.estado_operacional.replace(/_/g, " "))}
+                            </span>
+                        </div>
+
+                        <div>${barraBateriaMiniHtml(d.bateria)}</div>
+
+                        <div class="drone-specs-row">${specsHtml}</div>
+
+                        <div class="drone-card-foot">
+                            <span>${d.tasa_consumo_bat_km.toFixed(2)}% / km</span>
+                            <span>${d.velocidad_promedio_kmh.toFixed(0)} km/h</span>
+                            <span>${d.kilometraje_total_km.toFixed(2)} km acum.</span>
+                        </div>
+                    </div>
+                `;
+            })
+            .join("");
+
+        const dron = snapshot.flota.find((d) => d.id_dron === estadoUI.dronInspectorId) || snapshot.flota[0];
+        if (!dron) return;
+
+        $("inspDroneTitle").textContent = `${dron.id_dron} · ${dron.modelo_aeronave}`;
+        const pill = $("inspDroneStatus");
+        pill.textContent = dron.etiqueta_estado;
+        pill.className = `status-pill ${clasePildoraEstado(dron.estado_operacional)}`;
+
+        $("inspSystemsText").textContent = dron.diagnostico_sistemas;
+        $("inspFichaStr").textContent = dron.ficha_str;
+        $("inspFichaRepr").textContent = dron.ficha_repr;
+
+        $("btnEjecutarRecarga").disabled = !dron.puede_recargar;
+
+        // Historial inmutable de telemetría
+        $("inspTeleCount").textContent = `${dron.total_tramas_telemetria} ${dron.total_tramas_telemetria === 1 ? "trama" : "tramas"}`;
+        $("inspTeleHistory").innerHTML = [...dron.historial_telemetria]
+            .reverse()
+            .map((linea) => `<div class="immutable-item">${escaparHtml(linea)}</div>`)
+            .join("");
+    }
+
+    function renderizarCamposDinamicosFabrica(categoria) {
+        const esquema = estadoUI.snapshot?.esquema_fabrica?.[categoria];
+        const cont = $("fabDynamicFields");
+        if (!esquema) {
+            cont.innerHTML = "";
             return;
         }
 
-        if (!pedidos.some((p) => p.id_pedido === uiState.selectedOrderId)) {
-            uiState.selectedOrderId = pedidos[0].id_pedido;
-        }
+        $("fabModelo").value = esquema.modelo_sugerido || "";
+        $("fabVelocidad").value = esquema.velocidad_default || 55;
 
-        selector.innerHTML = pedidos
-            .map(
-                (p) =>
-                    `<option value="${p.id_pedido}" ${p.id_pedido === uiState.selectedOrderId ? "selected" : ""}>
-                        #${p.id_pedido} · ${p.categoria_etiqueta} (${p.estado})
-                    </option>`
-            )
-            .join("");
-
-        const pedido = obtenerPedidoSeleccionado();
-        if (!pedido) return;
-
-        $("selectedOrderStateBadge").textContent = pedido.estado;
-        $("assignOrderId").textContent = `#${pedido.id_pedido} (${pedido.peso_carga_kg.toFixed(1)} kg)`;
-        $("assignCategory").textContent = pedido.categoria_etiqueta;
-
-        const droneBadge = $("assignDroneBadge");
-        if (pedido.dron_asignado_id) {
-            droneBadge.textContent = `${pedido.dron_asignado_id} (Vinculado)`;
-        } else if (pedido.dron_sugerido_id) {
-            droneBadge.textContent = `${pedido.dron_sugerido_id} (Disponible)`;
-        } else {
-            droneBadge.textContent = "Sin dron disponible";
-        }
-
-        const viabText = $("assignViabilityText");
-        if (pedido.viabilidad) {
-            const v = pedido.viabilidad;
-            const estadoViab = v.es_viable ? "Viable" : "Riesgo / Exceso";
-            viabText.textContent = `${v.consumo_estimado_pct}% req. (${v.distancia_km} km) · ${estadoViab}`;
-        } else {
-            viabText.textContent = `${pedido.distancia_desde_base_km} km desde base`;
-        }
-
-        const btnAssign = $("btnAssignOrder");
-        const dispatchWrap = $("dispatchButtonsWrap");
-
-        if (pedido.estado === "PENDIENTE") {
-            btnAssign.classList.remove("is-hidden");
-            btnAssign.disabled = false;
-            btnAssign.textContent = "Confirmar Asignación de Dron";
-            dispatchWrap.classList.add("is-hidden");
-        } else if (pedido.estado === "ASIGNADO") {
-            btnAssign.classList.add("is-hidden");
-            dispatchWrap.classList.remove("is-hidden");
-        } else {
-            btnAssign.classList.remove("is-hidden");
-            btnAssign.disabled = true;
-            btnAssign.textContent = `Estado del Pedido: ${pedido.estado}`;
-            dispatchWrap.classList.add("is-hidden");
-        }
-    }
-
-    function renderizarNavegacionYRuta() {
-        const dron = obtenerDronSeleccionado();
-        const base = uiState.snapshot?.coordenadas_base || [6.2089, -75.5684];
-        if (!dron) return;
-
-        $("routeOriginCoords").textContent = formatearTupla(base);
-        $("navCruiseSpeed").textContent = `Vel. crucero: ${dron.velocidad_promedio_kmh.toFixed(0)} km/h`;
-
-        const track = document.querySelector(".route-vector-track");
-        const marker = $("routePlaneMarker");
-
-        if (dron.estado_operacional === "EN_MISION") {
-            $("routeDestTitle").textContent = dron.pedido_activo_id ? `Destino ${dron.pedido_activo_id}` : "Destino";
-            $("routeDestCoords").textContent = formatearTupla(dron.destino_actual);
-            animarNumero("navDistanceKm", dron.distancia_objetivo_km, 2);
-            animarNumero("navEtaMin", dron.eta_min, 1);
-
-            track.classList.add("is-flying");
-            marker.classList.remove("is-returning");
-            marker.style.left = `${Math.max(4, Math.min(96, dron.progreso_mision_pct))}%`;
-        } else if (dron.estado_operacional === "RETORNANDO_A_BASE") {
-            $("routeDestTitle").textContent = "Retorno a Base";
-            $("routeDestCoords").textContent = formatearTupla(dron.coordenadas);
-            animarNumero("navDistanceKm", dron.distancia_a_base_km, 2);
-            animarNumero("navEtaMin", dron.eta_min, 1);
-
-            track.classList.add("is-flying");
-            marker.classList.add("is-returning");
-            const posRetorno = 100 - dron.progreso_retorno_pct;
-            marker.style.left = `${Math.max(4, Math.min(96, posRetorno))}%`;
-        } else {
-            track.classList.remove("is-flying");
-            marker.classList.remove("is-returning");
-            marker.style.left = "5%";
-
-            const preview = uiState.routePreview;
-            if (preview && preview.id_dron === dron.id_dron) {
-                $("routeDestTitle").textContent = "Destino Proyectado";
-                $("routeDestCoords").textContent = formatearTupla(preview.destino);
-                animarNumero("navDistanceKm", preview.distancia_km, 2);
-                animarNumero("navEtaMin", preview.eta_min, 1);
-            } else {
-                const latInput = parseFloat($("inputDestLat").value) || 6.2620;
-                const lonInput = parseFloat($("inputDestLon").value) || -75.5780;
-                $("routeDestTitle").textContent = "Destino Solicitud";
-                $("routeDestCoords").textContent = formatearTupla([latInput, lonInput]);
-                animarNumero("navDistanceKm", dron.distancia_objetivo_km || 5.99, 2);
-                animarNumero("navEtaMin", dron.eta_min || 5.5, 1);
-            }
-        }
-    }
-
-    function renderizarRetornoBase() {
-        const dron = obtenerDronSeleccionado();
-        if (!dron) return;
-
-        const bloqueado = !dron.disponible || dron.en_mision || dron.retornando_a_base;
-        const lockTitle = $("returnLockTitle");
-        const flagBadge = $("returnFlagBadge");
-        const bar = $("returnProgressBar");
-        const distLabel = $("returnDistanceLabel");
-        const pctLabel = $("returnPctLabel");
-        const btnTrigger = $("btnTriggerReturn");
-        const btnFinalize = $("btnFinalizeReturn");
-        const lockIcon = $("returnLockIcon");
-
-        flagBadge.textContent = `retornando_a_base = ${dron.retornando_a_base ? "True" : "False"}`;
-
-        if (bloqueado) {
-            lockTitle.textContent = "Disponibilidad Bloqueada";
-            lockIcon.innerHTML = `
-                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            `;
-        } else {
-            lockTitle.textContent = "Disponible en Sede Base";
-            lockIcon.innerHTML = `
-                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
-                <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
-            `;
-        }
-
-        if (dron.retornando_a_base) {
-            bar.style.width = `${dron.progreso_retorno_pct}%`;
-            distLabel.textContent = `Distancia restante a base: ${dron.distancia_a_base_km.toFixed(2)} km`;
-            pctLabel.textContent = `${dron.progreso_retorno_pct.toFixed(0)}% completado`;
-            btnTrigger.classList.add("is-hidden");
-            btnFinalize.disabled = false;
-        } else if (dron.en_mision) {
-            bar.style.width = "0%";
-            distLabel.textContent = `Aeronave en misión activa (${dron.distancia_a_base_km.toFixed(2)} km de base)`;
-            pctLabel.textContent = "En tránsito";
-            btnTrigger.classList.remove("is-hidden");
-            btnFinalize.disabled = false;
-        } else {
-            bar.style.width = "100%";
-            distLabel.textContent = `Estacionado en Base Medellín (${dron.distancia_a_base_km.toFixed(2)} km)`;
-            pctLabel.textContent = "En tierra";
-            btnTrigger.classList.add("is-hidden");
-            btnFinalize.disabled = false;
-        }
-    }
-
-    function renderizarBitacora(logs) {
-        $("auditCountBadge").textContent = `${logs.length} eventos recientes`;
-        const tbody = $("auditTableBody");
-        tbody.innerHTML = logs
-            .map(
-                (log) => `
-                <tr>
-                    <td>${(log.fecha_hora || "").split(" ")[1] || log.fecha_hora}</td>
-                    <td><strong>${log.tipo_evento}</strong></td>
-                    <td>${log.id_dron}</td>
-                    <td>${log.id_pedido}</td>
-                    <td>${log.detalles}</td>
-                </tr>
-            `
-            )
+        cont.innerHTML = esquema.campos
+            .map((c) => {
+                if (c.tipo === "bool") {
+                    return `
+                        <div class="field checkbox-field">
+                            <input type="checkbox" id="fabParam_${escaparHtml(c.clave)}" data-fab-param="${escaparHtml(c.clave)}" ${c.default ? "checked" : ""}>
+                            <label for="fabParam_${escaparHtml(c.clave)}">${escaparHtml(c.etiqueta)}</label>
+                        </div>
+                    `;
+                }
+                return `
+                    <div class="field">
+                        <label for="fabParam_${escaparHtml(c.clave)}">${escaparHtml(c.etiqueta)}</label>
+                        <input
+                            type="number"
+                            id="fabParam_${escaparHtml(c.clave)}"
+                            data-fab-param="${escaparHtml(c.clave)}"
+                            min="${c.min ?? 0}"
+                            max="${c.max ?? 99999}"
+                            step="${c.step ?? 1}"
+                            value="${c.default}"
+                            required
+                        >
+                    </div>
+                `;
+            })
             .join("");
     }
 
-    function renderizarModalUsuarios(usuarios, activo) {
-        const lista = $("userSwitchList");
-        lista.innerHTML = "";
+    // ==========================================================================
+    // ESPACIO 3: DESPACHO, GEOCODIFICACIÓN ARCGIS Y USUARIOS
+    // ==========================================================================
 
-        usuarios.forEach((u) => {
-            const btn = document.createElement("button");
-            btn.type = "button";
-            const esActual = activo && u.id_usuario === activo.id_usuario;
-            btn.className = `user-option-btn${esActual ? " is-current" : ""}`;
-            btn.innerHTML = `
-                <span><strong>${u.nombre}</strong> <small class="mono-muted">(${u.id_usuario})</small></span>
-                <span class="rf-tag">${u.rol}</span>
+    function renderizarDespachoYUsuarios(snapshot) {
+        // Actualizar selector de usuario solicitante
+        const selUsr = $("pedUsuario");
+        const valorPrevio = selUsr.value || snapshot.usuario_activo.id_usuario;
+        selUsr.innerHTML = snapshot.usuarios
+            .map(
+                (u) =>
+                    `<option value="${escaparHtml(u.id_usuario)}">${escaparHtml(u.nombre)} (${escaparHtml(u.rol)})</option>`
+            )
+            .join("");
+        if (snapshot.usuarios.some((u) => u.id_usuario === valorPrevio)) {
+            selUsr.value = valorPrevio;
+        }
+
+        // Lista de usuarios registrados
+        $("usersListContainer").innerHTML = snapshot.usuarios
+            .map((u) => {
+                const esActivo = u.id_usuario === snapshot.usuario_activo.id_usuario;
+                return `
+                    <div class="user-row ${esActivo ? "is-active" : ""}">
+                        <div>
+                            <strong>${escaparHtml(u.nombre)}</strong>
+                            <small>${escaparHtml(u.id_usuario)} · Rol: ${escaparHtml(u.rol)}</small>
+                        </div>
+                        ${
+                            esActivo
+                                ? `<span class="status-pill pill-active">SESIÓN ACTIVA</span>`
+                                : `<button type="button" class="btn-secondary btn-sm" data-activar-usuario="${escaparHtml(u.id_usuario)}">Usar Sesión</button>`
+                        }
+                    </div>
+                `;
+            })
+            .join("");
+
+        // Bandeja de pedidos filtrada
+        const filtro = estadoUI.filtroPedidos;
+        const pedidosFiltrados =
+            filtro === "TODOS" ? snapshot.pedidos : snapshot.pedidos.filter((p) => p.estado === filtro);
+
+        const contPedidos = $("ordersBoardList");
+        if (pedidosFiltrados.length === 0) {
+            contPedidos.innerHTML = `
+                <div class="empty-state-box">
+                    <p>
+                        ${
+                            snapshot.pedidos.length === 0
+                                ? "Aún no hay pedidos registrados. Ingresa una dirección del Valle de Aburrá en el formulario izquierdo o inicia el Tour Guiado E2E."
+                                : `No hay pedidos en el estado '${escaparHtml(filtro)}'.`
+                        }
+                    </p>
+                </div>
             `;
-            btn.addEventListener("click", async () => {
-                try {
-                    const res = await apiPost("/api/usuarios", { accion: "cambiar", id_usuario: u.id_usuario });
-                    $("userModalBackdrop").classList.add("is-hidden");
-                    renderizarTodo(res);
-                } catch (err) {
-                    mostrarExcepcionDominio(err);
+            return;
+        }
+
+        contPedidos.innerHTML = pedidosFiltrados
+            .map((p) => {
+                const coordsTxt = p.coordenada_destino
+                    ? `(${p.coordenada_destino[0].toFixed(5)}, ${p.coordenada_destino[1].toFixed(5)})`
+                    : "Pendiente";
+                const candidatosTxt =
+                    p.candidatos && p.candidatos.length > 0
+                        ? p.candidatos
+                              .map(
+                                  (c) =>
+                                      `${c.id_dron}: ${c.bateria_actual_pct.toFixed(1)}% actual / ${c.consumo_ida_vuelta_pct.toFixed(1)}% req. (${c.elegible_ahora ? "Elegible" : "No elegible"})`
+                              )
+                              .join(" · ")
+                        : "Sin aeronaves registradas para esta categoría.";
+
+                let accionesHtml = "";
+                if (p.estado === "PENDIENTE") {
+                    accionesHtml = `
+                        <button type="button" class="btn-primary btn-sm" data-asignar-pedido="${escaparHtml(p.id_pedido)}">
+                            Asignar Dron Compatible
+                        </button>
+                        <button type="button" class="btn-danger-soft btn-sm" data-cancelar-pedido="${escaparHtml(p.id_pedido)}">
+                            Cancelar Pedido
+                        </button>
+                    `;
+                } else if (p.estado === "ASIGNADO") {
+                    accionesHtml = `
+                        <button type="button" class="btn-primary btn-sm" data-despegar-pedido="${escaparHtml(p.id_pedido)}" data-modo-desp="TEMPORAL">
+                            Despegar e Ir a Simulador
+                        </button>
+                        <button type="button" class="btn-secondary btn-sm" data-despegar-pedido="${escaparHtml(p.id_pedido)}" data-modo-desp="INSTANTANEO">
+                            Despacho Instantáneo
+                        </button>
+                        <button type="button" class="btn-danger-soft btn-sm" data-cancelar-pedido="${escaparHtml(p.id_pedido)}">
+                            Cancelar Reserva
+                        </button>
+                    `;
+                } else if (p.estado === "EN_TRANSITO" && p.dron_asignado_id) {
+                    accionesHtml = `
+                        <button type="button" class="btn-primary btn-sm" data-ir-cabina-dron="${escaparHtml(p.dron_asignado_id)}">
+                            Ver Vuelo en Cabina
+                        </button>
+                    `;
                 }
-            });
-            lista.appendChild(btn);
-        });
+
+                return `
+                    <div class="order-card">
+                        <div class="order-card-top">
+                            <div class="order-card-title">
+                                <strong>${escaparHtml(p.id_pedido)}</strong>
+                                <span class="rf-tag">${escaparHtml(p.categoria_etiqueta)}</span>
+                                ${p.fuente_geocodificacion ? `<span class="mono-hint">${escaparHtml(p.fuente_geocodificacion)}</span>` : ""}
+                            </div>
+                            <span class="status-pill ${clasePildoraEstado(p.estado)}">${escaparHtml(p.estado)}</span>
+                        </div>
+
+                        <div class="order-grid-meta">
+                            <div>
+                                <span>Destino</span>
+                                <strong>${escaparHtml(p.direccion_destino || "Coordenadas directas")}</strong>
+                                <small class="mono">${escaparHtml(coordsTxt)}</small>
+                            </div>
+                            <div>
+                                <span>Distancia Geodésica</span>
+                                <strong class="mono">${p.distancia_ida_km.toFixed(2)} km ida · ${p.distancia_ida_vuelta_km.toFixed(2)} km total</strong>
+                            </div>
+                            <div>
+                                <span>Carga y Solicitante</span>
+                                <strong>${p.peso_carga_kg.toFixed(1)} kg · ${escaparHtml(p.usuario_nombre)}</strong>
+                            </div>
+                            <div>
+                                <span>Aeronave Vinculada</span>
+                                <strong class="mono">${escaparHtml(p.dron_asignado_id || "Sin asignar")}</strong>
+                            </div>
+                        </div>
+
+                        <div class="candidate-hint">Autonomía ida+vuelta: ${escaparHtml(candidatosTxt)}</div>
+                        ${accionesHtml ? `<div class="order-actions">${accionesHtml}</div>` : ""}
+                    </div>
+                `;
+            })
+            .join("");
     }
 
-    // ======================================================================
-    // CÁLCULO DE PREVIEW GEODÉSICO EN VIVO
-    // ======================================================================
+    // ==========================================================================
+    // ESPACIO 4: COMPARADOR POLIMÓRFICO (HU-10)
+    // ==========================================================================
 
-    async function actualizarPreviewRutaSilencioso() {
-        const lat = parseFloat($("inputDestLat").value);
-        const lon = parseFloat($("inputDestLon").value);
-        if (Number.isNaN(lat) || Number.isNaN(lon)) return;
+    async function cargarComparativaPolimorfica(distanciaKm, sincronizarControles = true) {
+        const dist = Math.max(1, Number(distanciaKm) || 15);
+        estadoUI.distanciaPolimorfismoKm = dist;
 
-        try {
-            const prev = await apiGet(
-                `/api/ruta-preview?id_dron=${encodeURIComponent(uiState.selectedDroneId)}&lat=${lat}&lon=${lon}`
-            );
-            uiState.routePreview = prev;
-            renderizarNavegacionYRuta();
-        } catch (_) {
-            // Si las coordenadas editadas salen del polígono mientras se escribe, se valida al enviar
+        if (sincronizarControles) {
+            $("inputPolyDist").value = dist;
+            $("rangePolyDist").value = Math.min(60, dist);
+        }
+
+        const resp = await peticionAPI(`/api/polimorfismo/viabilidad?distancia_km=${encodeURIComponent(dist)}`);
+        estadoUI.datosPolimorfismo = resp;
+
+        $("polyBarsContainer").innerHTML = resp.resultados
+            .map((r) => {
+                const anchoPct = Math.min(100, r.consumo_estimado_pct);
+                const excede = !r.mision_viable;
+                return `
+                    <div class="poly-bar-card">
+                        <div class="poly-bar-top">
+                            <strong>${escaparHtml(r.id_dron)}</strong>
+                            <span>${r.consumo_estimado_pct.toFixed(1)}% cons.</span>
+                        </div>
+                        <small>${escaparHtml(r.tipo_dron)} · ${r.tasa_consumo_bat_km.toFixed(2)}% / km</small>
+                        <div class="poly-meter">
+                            <div class="poly-meter-fill ${excede ? "is-over" : ""}" style="width: ${anchoPct.toFixed(1)}%;"></div>
+                        </div>
+                        <small class="mono">Remanente: ${r.bateria_remanente_pct.toFixed(1)}% · ${r.mision_viable ? "VIABLE" : "NO VIABLE"}</small>
+                    </div>
+                `;
+            })
+            .join("");
+
+        $("polyTableBody").innerHTML = resp.resultados
+            .map(
+                (r) => `
+                    <tr>
+                        <td class="mono"><strong>${escaparHtml(r.id_dron)}</strong><br><small>${escaparHtml(r.modelo_aeronave)}</small></td>
+                        <td>${escaparHtml(r.tipo_dron)}<br><small>${escaparHtml(r.categoria_etiqueta)}</small></td>
+                        <td class="mono">${r.tasa_consumo_bat_km.toFixed(2)}% / km</td>
+                        <td>${barraBateriaMiniHtml(r.bateria_actual_pct)}</td>
+                        <td class="mono"><strong>${r.consumo_estimado_pct.toFixed(1)}%</strong></td>
+                        <td class="mono">${r.bateria_remanente_pct.toFixed(1)}%</td>
+                        <td>
+                            <span class="status-pill ${r.mision_viable ? "pill-ok" : "pill-danger"}">
+                                ${r.mision_viable ? "SÍ" : "NO"}
+                            </span>
+                        </td>
+                        <td>${escaparHtml(r.diagnostico_autonomia)}</td>
+                    </tr>
+                `
+            )
+            .join("");
+    }
+
+    // ==========================================================================
+    // ESPACIO 5: BITÁCORA DE AUDITORÍA Y REPORTE DE TORRE
+    // ==========================================================================
+
+    function renderizarBitacora(snapshot) {
+        $("torreStrBox").textContent = snapshot.torre_str;
+        $("torreReprBox").textContent = snapshot.torre_repr;
+
+        const termino = ($("inputBuscarLog").value || "").trim().toLowerCase();
+        const formato = $("selectFormatoLog").value;
+
+        const filtrados = snapshot.logs.filter((l) => {
+            if (!termino) return true;
+            const bolsa = `${l.id_log} ${l.tipo_evento} ${l.id_dron || ""} ${l.id_pedido || ""} ${l.detalles}`.toLowerCase();
+            return bolsa.includes(termino);
+        });
+
+        const usarTabla = formato === "tabla";
+        $("auditTableContainer").classList.toggle("is-hidden", !usarTabla);
+        $("auditRawContainer").classList.toggle("is-hidden", usarTabla);
+
+        if (usarTabla) {
+            $("auditTableBody").innerHTML =
+                filtrados.length === 0
+                    ? `<tr><td colspan="6" class="empty-cell">No hay registros que coincidan con el filtro actual.</td></tr>`
+                    : filtrados
+                          .map(
+                              (l) => `
+                                <tr>
+                                    <td class="mono">${escaparHtml(l.id_log)}</td>
+                                    <td class="mono">${escaparHtml(l.fecha_hora)}</td>
+                                    <td><span class="status-pill ${clasePildoraEstado(l.tipo_evento)}">${escaparHtml(l.tipo_evento)}</span></td>
+                                    <td class="mono">${escaparHtml(l.id_dron || "—")}</td>
+                                    <td class="mono">${escaparHtml(l.id_pedido || "—")}</td>
+                                    <td>${escaparHtml(l.detalles)}</td>
+                                </tr>
+                            `
+                          )
+                          .join("");
+        } else {
+            $("auditRawContainer").textContent =
+                filtrados.length === 0
+                    ? "Sin registros para mostrar."
+                    : filtrados.map((l) => l.registro_formateado).join("\n" + "-".repeat(72) + "\n");
         }
     }
 
-    // ======================================================================
-    // INICIALIZACIÓN DE EVENTOS E INTERACCIONES
-    // ======================================================================
+    // ==========================================================================
+    // REGISTRO DE EVENTOS INTERACTIVOS
+    // ==========================================================================
 
-    function poblarDestinosReferencia(destinos) {
-        const sel = $("selectDestinationPreset");
-        sel.innerHTML = "";
-
-        destinos.forEach((d, idx) => {
-            const opt = document.createElement("option");
-            opt.value = String(idx);
-            opt.textContent = `(${d.lat.toFixed(4)}, ${d.lon.toFixed(4)}) · ${d.nombre}`;
-            sel.appendChild(opt);
+    function enlazarEventos() {
+        // Pestañas de espacios de trabajo
+        document.querySelectorAll(".workspace-tab").forEach((btn) => {
+            btn.addEventListener("click", () => cambiarVista(btn.dataset.view));
         });
 
-        const optCustom = document.createElement("option");
-        optCustom.value = "custom_coords";
-        optCustom.textContent = "Coordenadas personalizadas (Lat, Lon)";
-        sel.appendChild(optCustom);
-
-        const optGeo = document.createElement("option");
-        optGeo.value = "geocoder_osm";
-        optGeo.textContent = "Geocodificar dirección textual (OSM / Catálogo Aburrá)";
-        sel.appendChild(optGeo);
-
-        sel.addEventListener("change", () => {
-            const val = sel.value;
-            const coordsRow = $("customDestinationFields");
-            const addrRow = $("addressGeocoderField");
-
-            if (val === "geocoder_osm") {
-                coordsRow.classList.add("is-hidden");
-                addrRow.classList.remove("is-hidden");
-            } else {
-                coordsRow.classList.remove("is-hidden");
-                addrRow.classList.add("is-hidden");
-                if (val !== "custom_coords") {
-                    const item = destinos[Number(val)];
-                    if (item) {
-                        $("inputDestLat").value = item.lat.toFixed(4);
-                        $("inputDestLon").value = item.lon.toFixed(4);
-                        actualizarPreviewRutaSilencioso();
-                    }
-                }
-            }
+        $("btnCloseFeedback").addEventListener("click", () => {
+            $("feedbackBanner").classList.add("is-hidden");
         });
-    }
 
-    async function ejecutarSincronizacion(manual = false) {
-        if (uiState.syncInFlight) return;
-        uiState.syncInFlight = true;
+        $("btnIrUsuarios").addEventListener("click", () => {
+            cambiarVista("despacho");
+            $("cardGestionUsuarios").scrollIntoView({ behavior: "smooth", block: "start" });
+        });
 
-        const icon = $("syncIcon");
-        if (manual) {
-            icon.classList.remove("is-spinning");
-            void icon.offsetWidth;
-            icon.classList.add("is-spinning");
-        }
+        $("btnNuevoPedidoRapido").addEventListener("click", () => {
+            cambiarVista("despacho");
+            $("pedDireccion").focus();
+        });
 
-        try {
-            const payload = {
-                factor_tiempo: uiState.speedFactor,
-                consultar_clima: manual,
-            };
-            if (manual && uiState.speedFactor > 1) {
-                payload.paso_fijo_seg = uiState.speedFactor * 2.0;
-            }
-            const res = await apiPost("/api/sincronizar", payload);
-            renderizarTodo(res);
-        } catch (err) {
-            mostrarExcepcionDominio(err);
-        } finally {
-            uiState.syncInFlight = false;
-        }
-    }
+        // Clima en vivo por nodo
+        const consultarClimaActual = async () => {
+            const nodo = $("selectNodoClima").value;
+            const estado = await peticionAPI(`/api/clima?nodo=${encodeURIComponent(nodo)}`);
+            aplicarSnapshot(estado, true);
+        };
+        $("btnConsultarClima").addEventListener("click", () => consultarClimaActual().catch(() => {}));
+        $("selectNodoClima").addEventListener("change", () => consultarClimaActual().catch(() => {}));
 
-    function vincularEventosDOM() {
-        // Sincronización manual RF-05
-        $("btnSyncFleet").addEventListener("click", () => ejecutarSincronizacion(true));
+        // Tour Guiado End-to-End (Opción 7 de ConsolaSkyRoute)
+        $("btnIniciarTour").addEventListener("click", () => lanzarTourGuiado());
 
-        // Selector de multiplicador Delta-t
-        document.querySelectorAll(".speed-btn").forEach((btn) => {
+        // Controles de Simulación Temporal
+        $("btnModePaso").addEventListener("click", () => cambiarModoSimulacion("paso"));
+        $("btnModeAuto").addEventListener("click", () => cambiarModoSimulacion("auto"));
+
+        $("btnAvanzarPulso").addEventListener("click", () => {
+            const dt = Number($("inputDeltaT").value) || 30;
+            ejecutarPulsoSimulacion(dt, false);
+        });
+
+        document.querySelectorAll("[data-quick-delta]").forEach((btn) => {
             btn.addEventListener("click", () => {
-                document.querySelectorAll(".speed-btn").forEach((b) => b.classList.remove("is-active"));
+                const dt = Number(btn.dataset.quickDelta) || 30;
+                $("inputDeltaT").value = dt;
+                ejecutarPulsoSimulacion(dt, false);
+            });
+        });
+
+        $("btnToggleAutoPlay").addEventListener("click", () => {
+            if (estadoUI.timerAuto) {
+                detenerAutoSimulacion();
+            } else {
+                iniciarAutoSimulacion();
+            }
+        });
+
+        $("btnOrdenarRetorno").addEventListener("click", async () => {
+            try {
+                const resp = await peticionAPI("/api/misiones/retorno", {
+                    metodo: "POST",
+                    cuerpo: { id_dron: estadoUI.dronCabinaId },
+                });
+                aplicarSnapshot(resp, true);
+            } catch (_e) {}
+        });
+
+        $("btnAterrizarManual").addEventListener("click", async () => {
+            try {
+                const resp = await peticionAPI("/api/misiones/aterrizar", {
+                    metodo: "POST",
+                    cuerpo: { id_dron: estadoUI.dronCabinaId },
+                });
+                aplicarSnapshot(resp, true);
+            } catch (_e) {}
+        });
+
+        $("btnReiniciarReloj").addEventListener("click", async () => {
+            try {
+                const resp = await peticionAPI("/api/simulacion/reloj", {
+                    metodo: "POST",
+                    cuerpo: { accion: "reiniciar" },
+                });
+                aplicarSnapshot(resp, true);
+            } catch (_e) {}
+        });
+
+        // Espacio 2: Flota, Fábrica, Recarga e Inyección de Telemetría
+        $("btnSincronizarFlota").addEventListener("click", async () => {
+            try {
+                const resp = await peticionAPI("/api/flota/telemetria", {
+                    metodo: "POST",
+                    cuerpo: { accion: "refrescar_flota" },
+                });
+                aplicarSnapshot(resp, true);
+            } catch (_e) {}
+        });
+
+        $("fabCategoria").addEventListener("change", (ev) => {
+            renderizarCamposDinamicosFabrica(ev.target.value);
+        });
+
+        $("formFabricaDron").addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const parametros = {};
+            document.querySelectorAll("[data-fab-param]").forEach((el) => {
+                const clave = el.dataset.fabParam;
+                parametros[clave] = el.type === "checkbox" ? el.checked : Number(el.value);
+            });
+
+            try {
+                const resp = await peticionAPI("/api/flota/fabrica", {
+                    metodo: "POST",
+                    cuerpo: {
+                        categoria: $("fabCategoria").value,
+                        id_dron: $("fabIdDron").value.trim(),
+                        modelo_aeronave: $("fabModelo").value.trim(),
+                        velocidad_promedio_kmh: Number($("fabVelocidad").value),
+                        bateria_inicial: Number($("fabBateria").value),
+                        parametros,
+                    },
+                });
+                $("fabIdDron").value = "";
+                aplicarSnapshot(resp, true);
+            } catch (_e) {}
+        });
+
+        $("rangeRecarga").addEventListener("input", (ev) => {
+            $("labelRecargaVal").textContent = `${ev.target.value}%`;
+        });
+
+        $("btnEjecutarRecarga").addEventListener("click", async () => {
+            try {
+                const resp = await peticionAPI("/api/flota/recargar", {
+                    metodo: "POST",
+                    cuerpo: {
+                        id_dron: estadoUI.dronInspectorId,
+                        porcentaje: Number($("rangeRecarga").value),
+                    },
+                });
+                aplicarSnapshot(resp, true);
+            } catch (_e) {}
+        });
+
+        document.querySelectorAll("[data-tele-preset]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                const preset = btn.dataset.telePreset;
+                if (preset === "nominal") {
+                    $("teleBat").value = 95;
+                    $("teleAlt").value = 0;
+                    $("teleMotores").value = "STANDBY";
+                    $("teleLat").value = 6.2196;
+                    $("teleLon").value = -75.5868;
+                } else if (preset === "bateria_baja") {
+                    $("teleBat").value = 12;
+                    $("teleAlt").value = 0;
+                    $("teleMotores").value = "STANDBY";
+                    $("teleLat").value = 6.2196;
+                    $("teleLon").value = -75.5868;
+                } else if (preset === "error_altitud") {
+                    $("teleBat").value = 80;
+                    $("teleAlt").value = 145;
+                    $("teleMotores").value = "EN_VUELO";
+                    $("teleLat").value = 6.2196;
+                    $("teleLon").value = -75.5868;
+                } else if (preset === "error_aburra") {
+                    $("teleBat").value = 85;
+                    $("teleAlt").value = 30;
+                    $("teleMotores").value = "EN_VUELO";
+                    $("teleLat").value = 4.7110;
+                    $("teleLon").value = -74.0721;
+                }
+            });
+        });
+
+        $("formTelemetriaManual").addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            try {
+                const resp = await peticionAPI("/api/flota/telemetria", {
+                    metodo: "POST",
+                    cuerpo: {
+                        accion: "inyectar",
+                        id_dron: estadoUI.dronInspectorId,
+                        bateria: Number($("teleBat").value),
+                        altitud: Number($("teleAlt").value),
+                        estado_motores: $("teleMotores").value,
+                        latitud: Number($("teleLat").value),
+                        longitud: Number($("teleLon").value),
+                    },
+                });
+                aplicarSnapshot(resp, true);
+            } catch (_e) {}
+        });
+
+        // Espacio 3: Despacho, Geocodificación y Usuarios
+        const fijarModoDestino = (modo) => {
+            estadoUI.modoDestinoPedido = modo;
+            $("btnModoDireccion").classList.toggle("is-active", modo === "direccion");
+            $("btnModoCoordenadas").classList.toggle("is-active", modo === "coordenadas");
+            $("bloqueDestinoDireccion").classList.toggle("is-hidden", modo !== "direccion");
+            $("bloqueDestinoCoordenadas").classList.toggle("is-hidden", modo !== "coordenadas");
+        };
+        $("btnModoDireccion").addEventListener("click", () => fijarModoDestino("direccion"));
+        $("btnModoCoordenadas").addEventListener("click", () => fijarModoDestino("coordenadas"));
+
+        $("btnVerificarDireccion").addEventListener("click", async () => {
+            const dir = $("pedDireccion").value.trim();
+            if (!dir) {
+                mostrarNotificacion({
+                    tipo: "error",
+                    insignia: "VALIDACIÓN",
+                    titulo: "Dirección vacía",
+                    mensaje: "Ingresa una dirección o punto de referencia en el Valle de Aburrá para verificar.",
+                });
+                return;
+            }
+            try {
+                const det = await peticionAPI("/api/geocodificar", {
+                    metodo: "POST",
+                    cuerpo: { direccion: dir },
+                });
+                const card = $("geoPreviewCard");
+                card.classList.remove("is-hidden");
+                card.innerHTML = `
+                    <strong>Coordenadas resueltas: <span class="mono">(${det.latitud.toFixed(6)}, ${det.longitud.toFixed(6)})</span></strong>
+                    <span>Motor de resolución: <strong class="mono">${escaparHtml(det.fuente)}</strong> · Dentro del Valle de Aburrá</span>
+                    <span>Distancia desde Olaya Herrera: <strong class="mono">${det.distancia_ida_km.toFixed(2)} km ida (${det.distancia_ida_vuelta_km.toFixed(2)} km ida+vuelta)</strong></span>
+                `;
+            } catch (_e) {
+                $("geoPreviewCard").classList.add("is-hidden");
+            }
+        });
+
+        $("formNuevoPedido").addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            const cuerpo = {
+                id_pedido: $("pedIdOpcional").value.trim(),
+                id_usuario: $("pedUsuario").value,
+                categoria_requerida: $("pedCategoria").value,
+                peso_carga_kg: Number($("pedPeso").value),
+            };
+            if (estadoUI.modoDestinoPedido === "direccion") {
+                cuerpo.direccion_destino = $("pedDireccion").value.trim();
+            } else {
+                cuerpo.latitud = $("pedLatitud").value;
+                cuerpo.longitud = $("pedLongitud").value;
+            }
+
+            try {
+                const resp = await peticionAPI("/api/pedidos", {
+                    metodo: "POST",
+                    cuerpo,
+                });
+                $("pedIdOpcional").value = "";
+                $("pedDireccion").value = "";
+                $("geoPreviewCard").classList.add("is-hidden");
+                aplicarSnapshot(resp, true);
+            } catch (_e) {}
+        });
+
+        $("formNuevoUsuario").addEventListener("submit", async (ev) => {
+            ev.preventDefault();
+            try {
+                const resp = await peticionAPI("/api/usuarios", {
+                    metodo: "POST",
+                    cuerpo: {
+                        accion: "registrar",
+                        id_usuario: $("usrId").value.trim(),
+                        nombre: $("usrNombre").value.trim(),
+                        rol: $("usrRol").value,
+                    },
+                });
+                $("usrId").value = "";
+                $("usrNombre").value = "";
+                aplicarSnapshot(resp, true);
+            } catch (_e) {}
+        });
+
+        $("orderStateFilters").addEventListener("click", (ev) => {
+            const btn = ev.target.closest("[data-order-filter]");
+            if (!btn) return;
+            estadoUI.filtroPedidos = btn.dataset.orderFilter;
+            document.querySelectorAll("[data-order-filter]").forEach((b) => {
+                b.classList.toggle("is-active", b.dataset.orderFilter === estadoUI.filtroPedidos);
+            });
+            if (estadoUI.snapshot) renderizarDespachoYUsuarios(estadoUI.snapshot);
+        });
+
+        // Espacio 4: Comparador Polimórfico HU-10
+        $("inputPolyDist").addEventListener("change", (ev) => {
+            cargarComparativaPolimorfica(ev.target.value, true).catch(() => {});
+        });
+        $("rangePolyDist").addEventListener("input", (ev) => {
+            $("inputPolyDist").value = ev.target.value;
+            cargarComparativaPolimorfica(ev.target.value, false).catch(() => {});
+        });
+        document.querySelectorAll("[data-poly-dist]").forEach((btn) => {
+            btn.addEventListener("click", () => {
+                document.querySelectorAll("[data-poly-dist]").forEach((b) => b.classList.remove("is-active"));
                 btn.classList.add("is-active");
-                uiState.speedFactor = Number(btn.dataset.speed) || 1;
+                cargarComparativaPolimorfica(Number(btn.dataset.polyDist), true).catch(() => {});
             });
         });
 
-        // Auto-Sync periódico no bloqueante
-        $("btnAutoSync").addEventListener("click", () => {
-            const btn = $("btnAutoSync");
-            if (uiState.autoSyncId) {
-                clearInterval(uiState.autoSyncId);
-                uiState.autoSyncId = null;
-                btn.classList.remove("is-running");
-                btn.setAttribute("aria-pressed", "false");
-            } else {
-                // Asegurar velocidad fluida por defecto al activar modo automático
-                if (uiState.speedFactor === 1) {
-                    uiState.speedFactor = 20;
-                    document.querySelectorAll(".speed-btn").forEach((b) => {
-                        b.classList.toggle("is-active", b.dataset.speed === "20");
-                    });
+        // Espacio 5: Filtros de Bitácora
+        $("inputBuscarLog").addEventListener("input", () => {
+            if (estadoUI.snapshot) renderizarBitacora(estadoUI.snapshot);
+        });
+        $("selectFormatoLog").addEventListener("change", () => {
+            if (estadoUI.snapshot) renderizarBitacora(estadoUI.snapshot);
+        });
+
+        // Delegación global de acciones dinámicas en tarjetas y listas
+        document.addEventListener("click", async (ev) => {
+            const btnSug = ev.target.closest("[data-dir-sugerida]");
+            if (btnSug) {
+                $("pedDireccion").value = btnSug.dataset.dirSugerida;
+                $("btnVerificarDireccion").click();
+                return;
+            }
+
+            const btnIrVista = ev.target.closest("[data-ir-vista]");
+            if (btnIrVista) {
+                cambiarVista(btnIrVista.dataset.irVista);
+                return;
+            }
+
+            const btnTour = ev.target.closest("[data-accion-tour]");
+            if (btnTour) {
+                lanzarTourGuiado();
+                return;
+            }
+
+            const btnEnfocar = ev.target.closest("[data-enfocar-cabina]");
+            if (btnEnfocar) {
+                estadoUI.dronCabinaId = btnEnfocar.dataset.enfocarCabina;
+                if (estadoUI.snapshot) renderizarCabinaOperaciones(estadoUI.snapshot);
+                return;
+            }
+
+            const btnIrCabina = ev.target.closest("[data-ir-cabina-dron]");
+            if (btnIrCabina) {
+                estadoUI.dronCabinaId = btnIrCabina.dataset.irCabinaDron;
+                cambiarVista("operaciones");
+                if (estadoUI.snapshot) renderizarCabinaOperaciones(estadoUI.snapshot);
+                return;
+            }
+
+            const btnInsp = ev.target.closest("[data-inspeccionar-dron]");
+            if (btnInsp) {
+                estadoUI.dronInspectorId = btnInsp.dataset.inspeccionarDron;
+                if (estadoUI.snapshot) {
+                    const d = estadoUI.snapshot.flota.find((x) => x.id_dron === estadoUI.dronInspectorId);
+                    if (d) {
+                        $("teleBat").value = d.bateria;
+                        $("teleAlt").value = d.altitud;
+                        $("teleMotores").value = d.estado_motores;
+                        $("teleLat").value = d.coordenadas[0];
+                        $("teleLon").value = d.coordenadas[1];
+                    }
+                    renderizarFlotaEInspector(estadoUI.snapshot);
                 }
-                uiState.autoSyncId = setInterval(() => ejecutarSincronizacion(false), 950);
-                btn.classList.add("is-running");
-                btn.setAttribute("aria-pressed", "true");
-            }
-        });
-
-        // Cerrar y probar alerta de excepción RF-02
-        $("btnDismissError").addEventListener("click", () => limpiarExcepcionDominio());
-        $("btnQuickTestError").addEventListener("click", async () => {
-            try {
-                await apiPost("/api/telemetria", {
-                    id_dron: uiState.selectedDroneId,
-                    bateria: -5.0,
-                });
-            } catch (err) {
-                mostrarExcepcionDominio(err);
-            }
-        });
-
-        // Pestañas de inspección (__str__, __repr__, sistemas)
-        document.querySelectorAll(".seg-tab").forEach((tab) => {
-            tab.addEventListener("click", () => {
-                document.querySelectorAll(".seg-tab").forEach((t) => t.classList.remove("is-active"));
-                tab.classList.add("is-active");
-                uiState.inspectMode = tab.dataset.inspect;
-                renderizarMonitoreoDron();
-            });
-        });
-
-        // Selección de las 6 categorías de drones
-        document.querySelectorAll(".cat-card").forEach((card) => {
-            card.addEventListener("click", () => {
-                document.querySelectorAll(".cat-card").forEach((c) => c.classList.remove("is-selected"));
-                card.classList.add("is-selected");
-                uiState.selectedCategory = card.dataset.category;
-
-                // Enfocar automáticamente una aeronave de esa categoría si existe
-                const dronCat = (uiState.snapshot?.flota || []).find((d) => d.categoria === uiState.selectedCategory);
-                if (dronCat) {
-                    uiState.selectedDroneId = dronCat.id_dron;
-                    actualizarPreviewRutaSilencioso();
-                    renderizarTodo(uiState.snapshot);
-                }
-            });
-        });
-
-        // Generador de ID de pedido
-        $("btnGenOrderId").addEventListener("click", () => {
-            uiState.orderSeq += 1;
-            $("inputOrderId").value = `PED-${uiState.orderSeq}`;
-        });
-
-        // Cambio en coordenadas actualiza preview geodésico
-        ["inputDestLat", "inputDestLon"].forEach((id) => {
-            $(id).addEventListener("input", () => actualizarPreviewRutaSilencioso());
-        });
-
-        // Registrar nueva solicitud de pedido (RF-07)
-        $("formNewOrder").addEventListener("submit", async (ev) => {
-            ev.preventDefault();
-            const modoDestino = $("selectDestinationPreset").value;
-            const payload = {
-                id_pedido: $("inputOrderId").value.trim(),
-                categoria_requerida: uiState.selectedCategory,
-                peso_carga_kg: parseFloat($("inputOrderWeight").value || "0"),
-            };
-
-            if (modoDestino === "geocoder_osm") {
-                payload.direccion_destino = $("inputDestAddress").value.trim();
-            } else {
-                payload.latitud = parseFloat($("inputDestLat").value);
-                payload.longitud = parseFloat($("inputDestLon").value);
-                const optText = $("selectDestinationPreset").selectedOptions[0]?.textContent || "";
-                if (optText.includes("·")) {
-                    payload.direccion_destino = optText.split("·")[1].trim();
-                }
+                return;
             }
 
-            try {
-                const res = await apiPost("/api/pedidos", payload);
-                uiState.orderSeq += 1;
-                $("inputOrderId").value = `PED-${uiState.orderSeq}`;
-                renderizarTodo(res);
-            } catch (err) {
-                mostrarExcepcionDominio(err);
-            }
-        });
-
-        // Selector de pedido activo
-        $("selectActiveOrder").addEventListener("change", (ev) => {
-            uiState.selectedOrderId = ev.target.value;
-            const ped = obtenerPedidoSeleccionado();
-            if (ped?.dron_asignado_id) {
-                uiState.selectedDroneId = ped.dron_asignado_id;
-            }
-            renderizarTodo(uiState.snapshot);
-        });
-
-        // Cruzar y asignar dron (RF-08)
-        $("btnAssignOrder").addEventListener("click", async () => {
-            const ped = obtenerPedidoSeleccionado();
-            if (!ped) return;
-            try {
-                const res = await apiPost("/api/pedidos/asignar", { id_pedido: ped.id_pedido });
-                renderizarTodo(res);
-            } catch (err) {
-                mostrarExcepcionDominio(err);
-            }
-        });
-
-        // Despachar misión simulada Delta-t vs instantánea (HU-12)
-        $("btnDispatchSimulated").addEventListener("click", async () => {
-            const ped = obtenerPedidoSeleccionado();
-            if (!ped) return;
-            try {
-                const res = await apiPost("/api/pedidos/despachar", {
-                    id_pedido: ped.id_pedido,
-                    modo: "SIMULADO",
-                });
-                renderizarTodo(res);
-            } catch (err) {
-                mostrarExcepcionDominio(err);
-            }
-        });
-
-        $("btnDispatchInstant").addEventListener("click", async () => {
-            const ped = obtenerPedidoSeleccionado();
-            if (!ped) return;
-            try {
-                const res = await apiPost("/api/pedidos/despachar", {
-                    id_pedido: ped.id_pedido,
-                    modo: "INSTANTANEO",
-                });
-                renderizarTodo(res);
-            } catch (err) {
-                mostrarExcepcionDominio(err);
-            }
-        });
-
-        // Retorno obligatorio a base y aterrizaje (RF-09)
-        $("btnTriggerReturn").addEventListener("click", async () => {
-            try {
-                const res = await apiPost("/api/drones/retorno", { id_dron: uiState.selectedDroneId });
-                renderizarTodo(res);
-            } catch (err) {
-                mostrarExcepcionDominio(err);
-            }
-        });
-
-        $("btnFinalizeReturn").addEventListener("click", async () => {
-            try {
-                const res = await apiPost("/api/drones/aterrizar", { id_dron: uiState.selectedDroneId });
-                renderizarTodo(res);
-            } catch (err) {
-                mostrarExcepcionDominio(err);
-            }
-        });
-
-        // Recarga de batería en plataforma
-        $("btnRechargeDrone").addEventListener("click", async () => {
-            try {
-                const res = await apiPost("/api/drones/recargar", { id_dron: uiState.selectedDroneId });
-                renderizarTodo(res);
-            } catch (err) {
-                mostrarExcepcionDominio(err);
-            }
-        });
-
-        // Acordeón de inyección de telemetría (RF-01 / RF-02)
-        $("btnToggleInjector").addEventListener("click", () => {
-            const btn = $("btnToggleInjector");
-            const body = $("formTelemetryInjector");
-            const expandido = btn.getAttribute("aria-expanded") === "true";
-            btn.setAttribute("aria-expanded", String(!expandido));
-            body.classList.toggle("is-collapsed", expandido);
-        });
-
-        document.querySelectorAll(".chip-test-btn").forEach((chip) => {
-            chip.addEventListener("click", async () => {
-                const tipo = chip.dataset.test;
-                let payload = { id_dron: uiState.selectedDroneId };
-                if (tipo === "bateria") {
-                    payload.bateria = -5.0;
-                } else if (tipo === "altitud") {
-                    payload.altitud = 145.0;
-                    payload.estado_motores = "EN_VUELO";
-                } else if (tipo === "coherencia") {
-                    payload.altitud = 0.0;
-                    payload.estado_motores = "EN_VUELO";
-                }
+            const btnActivarUsr = ev.target.closest("[data-activar-usuario]");
+            if (btnActivarUsr) {
                 try {
-                    const res = await apiPost("/api/telemetria", payload);
-                    renderizarTodo(res);
-                } catch (err) {
-                    mostrarExcepcionDominio(err);
-                }
-            });
-        });
-
-        $("formTelemetryInjector").addEventListener("submit", async (ev) => {
-            ev.preventDefault();
-            const payload = {
-                id_dron: uiState.selectedDroneId,
-                bateria: $("injBattery").value,
-                altitud: $("injAltitude").value,
-                estado_motores: $("injMotors").value,
-            };
-            try {
-                const res = await apiPost("/api/telemetria", payload);
-                renderizarTodo(res);
-            } catch (err) {
-                mostrarExcepcionDominio(err);
+                    const resp = await peticionAPI("/api/usuarios", {
+                        metodo: "POST",
+                        cuerpo: { accion: "cambiar", id_usuario: btnActivarUsr.dataset.activarUsuario },
+                    });
+                    aplicarSnapshot(resp, true);
+                } catch (_e) {}
+                return;
             }
-        });
 
-        // Bitácora colapsable
-        $("btnToggleAudit").addEventListener("click", () => {
-            const btn = $("btnToggleAudit");
-            const panel = $("auditPanelBody");
-            const exp = btn.getAttribute("aria-expanded") === "true";
-            btn.setAttribute("aria-expanded", String(!exp));
-            panel.classList.toggle("is-collapsed", exp);
-        });
-
-        // Modal de Usuarios (RF-06)
-        $("btnOpenUserModal").addEventListener("click", () => {
-            $("userModalBackdrop").classList.remove("is-hidden");
-        });
-        $("btnCloseUserModal").addEventListener("click", () => {
-            $("userModalBackdrop").classList.add("is-hidden");
-        });
-        $("userModalBackdrop").addEventListener("click", (ev) => {
-            if (ev.target === $("userModalBackdrop")) {
-                $("userModalBackdrop").classList.add("is-hidden");
+            const btnAsignar = ev.target.closest("[data-asignar-pedido]");
+            if (btnAsignar) {
+                try {
+                    const resp = await peticionAPI("/api/pedidos/asignar", {
+                        metodo: "POST",
+                        cuerpo: { id_pedido: btnAsignar.dataset.asignarPedido },
+                    });
+                    aplicarSnapshot(resp, true);
+                } catch (_e) {}
+                return;
             }
-        });
 
-        $("formRegisterUser").addEventListener("submit", async (ev) => {
-            ev.preventDefault();
-            try {
-                const res = await apiPost("/api/usuarios", {
-                    accion: "registrar",
-                    id_usuario: $("newUserId").value.trim(),
-                    nombre: $("newUserName").value.trim(),
-                    rol: $("newUserRole").value,
-                });
-                $("newUserId").value = "";
-                $("newUserName").value = "";
-                $("userModalBackdrop").classList.add("is-hidden");
-                renderizarTodo(res);
-            } catch (err) {
-                mostrarExcepcionDominio(err);
+            const btnCancelar = ev.target.closest("[data-cancelar-pedido]");
+            if (btnCancelar) {
+                try {
+                    const resp = await peticionAPI("/api/pedidos/cancelar", {
+                        metodo: "POST",
+                        cuerpo: { id_pedido: btnCancelar.dataset.cancelarPedido },
+                    });
+                    aplicarSnapshot(resp, true);
+                } catch (_e) {}
+                return;
+            }
+
+            const btnDespegar = ev.target.closest("[data-despegar-pedido]");
+            if (btnDespegar) {
+                const idPed = btnDespegar.dataset.despegarPedido;
+                const modoDesp = btnDespegar.dataset.modoDesp || "TEMPORAL";
+                try {
+                    const resp = await peticionAPI("/api/misiones/despegar", {
+                        metodo: "POST",
+                        cuerpo: {
+                            id_pedido: idPed,
+                            modo_despacho: modoDesp,
+                            actualizar_clima: true,
+                        },
+                    });
+                    aplicarSnapshot(resp, true);
+                    cambiarVista("operaciones");
+                } catch (_e) {}
             }
         });
     }
 
-    // ======================================================================
-    // ARRANQUE INICIAL DE LA CONSOLA
-    // ======================================================================
+    async function lanzarTourGuiado() {
+        const btn = $("btnIniciarTour");
+        btn.disabled = true;
+        detenerAutoSimulacion();
+        cambiarVista("operaciones");
 
-    async function inicializarAplicacion() {
-        vincularEventosDOM();
         try {
-            const datos = await apiGet("/api/estado");
-            poblarDestinosReferencia(datos.destinos_referencia || []);
-            renderizarTodo(datos);
-            await actualizarPreviewRutaSilencioso();
-        } catch (err) {
-            mostrarExcepcionDominio(err);
+            const resp = await peticionAPI("/api/demo/preparar", { metodo: "POST", cuerpo: {} });
+            aplicarSnapshot(resp, true);
+            $("selectAutoDelta").value = "25";
+            cambiarModoSimulacion("auto");
+            iniciarAutoSimulacion();
+        } catch (_e) {
+        } finally {
+            btn.disabled = false;
         }
     }
 
-    document.addEventListener("DOMContentLoaded", inicializarAplicacion);
+    // ==========================================================================
+    // ARRANQUE INICIAL DE LA APLICACIÓN
+    // ==========================================================================
+
+    async function iniciar() {
+        enlazarEventos();
+        try {
+            const estadoInicial = await peticionAPI("/api/estado");
+            aplicarSnapshot(estadoInicial, false);
+        } catch (_e) {}
+    }
+
+    document.addEventListener("DOMContentLoaded", iniciar);
 })();
