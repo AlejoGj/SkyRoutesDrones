@@ -54,6 +54,27 @@ if DronCargaPesada is not None:
     FABRICA_DRONES['CARGA_PESADA'] = DronCargaPesada
 
 
+def registrar_subclase_en_fabrica(categoria: str, clase_dron: type[Dron]) -> None:
+    """
+    Permite registrar o extender dinámicamente el catálogo de la fábrica de drones (HU-12).
+    """
+    if not isinstance(categoria, str) or not categoria.strip():
+        raise ValueError("La categoría debe ser una cadena de texto no vacía.")
+    if not isinstance(clase_dron, type) or not issubclass(clase_dron, Dron):
+        raise TypeError("El parámetro debe ser una subclase válida de Dron.")
+    FABRICA_DRONES[categoria.strip()] = clase_dron
+
+
+def instanciar_dron_desde_fabrica(categoria: str, *args, **kwargs) -> Dron:
+    """
+    Instancia una subclase de dron a partir de la categoría registrada en FABRICA_DRONES (RF-08, Sprint 2).
+    """
+    if categoria not in FABRICA_DRONES:
+        raise ValueError(f"Categoría '{categoria}' no registrada en FABRICA_DRONES.")
+    clase_dron = FABRICA_DRONES[categoria]
+    return clase_dron(*args, **kwargs)
+
+
 
 class SistemaCentroControl:
     def __init__(
