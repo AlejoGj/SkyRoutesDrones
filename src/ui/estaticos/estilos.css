@@ -862,6 +862,135 @@ button:disabled {
     font-size: 0.75rem;
 }
 
+.drone-mini-title-row {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.drone-mini-tag {
+    font-family: var(--font-mono);
+    font-size: 0.62rem;
+    font-weight: 700;
+    padding: 1px 5px;
+    border-radius: var(--radius-xs);
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    display: inline-block;
+    line-height: 1.3;
+}
+
+.drone-mini-tag.tag-flight {
+    background: rgba(16, 185, 129, 0.15);
+    color: #10b981;
+    border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.drone-mini-tag.tag-return {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.35);
+}
+
+.drone-mini-tag.tag-busy {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
+    border: 1px solid rgba(139, 92, 246, 0.35);
+}
+
+.drone-mini-tag.tag-standby {
+    background: rgba(100, 116, 139, 0.1);
+    color: var(--ink-500);
+    border: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+/* Tira de Flota en Vuelo Concurrente */
+.concurrent-fleet-strip {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    background: rgba(245, 247, 250, 0.6);
+    border: 1px solid var(--border-hairline);
+    border-radius: var(--radius-md);
+    padding: 8px 14px;
+    margin-bottom: 16px;
+}
+
+.fleet-strip-label {
+    font-size: 0.76rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--ink-500);
+}
+
+.fleet-strip-chips {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.fleet-strip-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: var(--radius-sm);
+    background: #ffffff;
+    border: 1px solid var(--border-hairline);
+    cursor: pointer;
+    font-size: 0.78rem;
+    color: var(--ink-700);
+    transition: all 0.16s ease;
+}
+
+.fleet-strip-chip:hover {
+    background: var(--bg-inset-hover);
+    border-color: var(--border-focus);
+    transform: translateY(-1px);
+}
+
+.fleet-strip-chip.is-active {
+    background: var(--gold-tint);
+    border-color: var(--border-focus);
+    color: var(--ink-900);
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(229, 187, 52, 0.15);
+}
+
+.chip-status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.chip-status-dot.is-flight {
+    background: #10b981;
+    box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.25);
+    animation: pulseDot 1.5s infinite;
+}
+
+.chip-status-dot.is-return {
+    background: #f59e0b;
+    box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+    animation: pulseDot 1.5s infinite;
+}
+
+.chip-meta {
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--ink-500);
+}
+
+@keyframes pulseDot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+}
+
 /* Cabina e Indicador Lineal Minimalista */
 
 .stage-top {

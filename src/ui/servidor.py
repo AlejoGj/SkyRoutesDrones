@@ -178,9 +178,10 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
                     )
                 elif ruta == "/api/misiones/despegar":
                     respuesta = self.controlador.despegar_mision(
-                        id_pedido=str(datos.get("id_pedido", "")),
+                        id_pedido=str(datos.get("id_pedido", "")).strip(),
                         modo_despacho=str(datos.get("modo_despacho", "TEMPORAL")),
                         actualizar_clima=bool(datos.get("actualizar_clima", True)),
+                        id_dron=str(datos.get("id_dron", "")).strip(),
                     )
                 elif ruta == "/api/misiones/retorno":
                     respuesta = self.controlador.ordenar_retorno_base(

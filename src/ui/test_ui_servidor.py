@@ -297,6 +297,70 @@ class TestServidorUISkyRouteV2(unittest.TestCase):
         ped_c = next(p for p in res_canc["pedidos"] if p["id_pedido"] == "PED-CANC-01")
         self.assertEqual(ped_c["estado"], "CANCELADO")
 
+    def test_09_despacho_concurrente_multidron_y_foco_desacoplado(self) -> None:
+        """Verifica que dos aeronaves puedan volar simultáneamente y avanzar juntas con id_dron=None sin forzar foco."""
+        # 1. Crear y despegar primera misión con DRON-CAR-02 (Carga Pesada)
+        self._post_json(
+            "/api/pedidos",
+            {
+                "id_pedido": "PED-CONC-01",
+                "categoria_requerida": "CARGA_PESADA",
+                "direccion_destino": "Parque de El Poblado",
+                "peso_carga_kg": 5.0,
+            },
+        )
+        self._post_json("/api/pedidos/asignar", {"id_pedido": "PED-CONC-01", "id_dron": "DRON-CAR-02"})
+        cod_d1, res_d1 = self._post_json(
+            "/api/misiones/despegar",
+            {"id_pedido": "PED-CONC-01", "id_dron": "DRON-CAR-02"},
+        )
+        self.assertEqual(cod_d1, 200)
+
+        # 2. Crear y despegar segunda misión concurrente con DRON-VIG-03 (Vigilancia)
+        self._post_json(
+            "/api/pedidos",
+            {
+                "id_pedido": "PED-CONC-02",
+                "categoria_requerida": "VIGILANCIA",
+                "direccion_destino": "Parque de Envigado",
+                "peso_carga_kg": 0.5,
+            },
+        )
+        self._post_json("/api/pedidos/asignar", {"id_pedido": "PED-CONC-02", "id_dron": "DRON-VIG-03"})
+        cod_d2, res_d2 = self._post_json(
+            "/api/misiones/despegar",
+            {"id_pedido": "PED-CONC-02", "id_dron": "DRON-VIG-03"},
+        )
+        self.assertEqual(cod_d2, 200)
+
+        # 3. Comprobar que ambas aeronaves están en vuelo activo en la flota
+        d1 = next(d for d in res_d2["flota"] if d["id_dron"] == "DRON-CAR-02")
+        d2 = next(d for d in res_d2["flota"] if d["id_dron"] == "DRON-VIG-03")
+        self.assertTrue(d1["en_vuelo_activo"])
+        self.assertTrue(d2["en_vuelo_activo"])
+
+        # 4. Avanzar pulso global con id_dron: None (ambos drones avanzan a la vez)
+        cod_paso, res_paso = self._post_json(
+            "/api/simulacion/paso",
+            {"id_dron": None, "delta_t": 30.0, "usar_reloj_real": False},
+        )
+        self.assertEqual(cod_paso, 200)
+
+        # Verificación: no secuestra el foco (dron_enfocado_id es None)
+        self.assertIsNone(res_paso.get("dron_enfocado_id"))
+
+        # Verificación: ambos drones emitieron pulso y consumieron batería
+        ids_pulsos = [p["id_dron"] for p in res_paso["pulsos_emitidos"]]
+        self.assertIn("DRON-CAR-02", ids_pulsos)
+        self.assertIn("DRON-VIG-03", ids_pulsos)
+
+        d1_post = next(d for d in res_paso["flota"] if d["id_dron"] == "DRON-CAR-02")
+        d2_post = next(d for d in res_paso["flota"] if d["id_dron"] == "DRON-VIG-03")
+        self.assertLess(d1_post["bateria"], d1["bateria"])
+        self.assertLess(d2_post["bateria"], d2["bateria"])
+        self.assertGreater(d1_post["kilometraje_total_km"], 0.0)
+        self.assertGreater(d2_post["kilometraje_total_km"], 0.0)
+
 
 if __name__ == "__main__":
     unittest.main()

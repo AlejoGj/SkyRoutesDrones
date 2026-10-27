@@ -12,6 +12,7 @@
         dronCabinaId: "DRON-ENT-01",
         dronInspectorId: "DRON-ENT-01",
         modoSimulacion: "paso", // "paso" | "auto"
+        simularSoloEnfocado: false, // false: simula toda la flota activa simultáneamente
         timerAuto: null,
         modoDestinoPedido: "direccion", // "direccion" | "coordenadas"
         filtroPedidos: "TODOS",
@@ -105,16 +106,23 @@
     function aplicarSnapshot(snapshot, mostrarMensaje = true) {
         estadoUI.snapshot = snapshot;
 
-        if (snapshot.dron_enfocado_id) {
-            estadoUI.dronCabinaId = snapshot.dron_enfocado_id;
-            estadoUI.dronInspectorId = snapshot.dron_enfocado_id;
-        } else {
-            // Si algún dron está volando y el actual está en tierra sin sesión, priorizar el activo
-            const dronActual = snapshot.flota.find((d) => d.id_dron === estadoUI.dronCabinaId);
-            const dronVolando = snapshot.flota.find((d) => d.en_vuelo_activo);
-            if ((!dronActual || (!dronActual.en_vuelo_activo && !snapshot.sesiones_vuelo[dronActual.id_dron])) && dronVolando) {
-                estadoUI.dronCabinaId = dronVolando.id_dron;
+        // Desacoplamiento de foco: se respeta la selección explícita del operador
+        if (!estadoUI.dronCabinaId) {
+            estadoUI.dronCabinaId = snapshot.dron_enfocado_id || (snapshot.flota[0] && snapshot.flota[0].id_dron);
+            estadoUI.dronInspectorId = estadoUI.dronCabinaId;
+        } else if (snapshot.dron_enfocado_id && snapshot.dron_enfocado_id !== estadoUI.dronCabinaId) {
+            // Solo sincronizar automáticamente ante acciones manuales explícitas con mensaje (despegue, recarga)
+            // y NUNCA durante pulsos de simulación periódica (evita secuestro de pantalla)
+            if (snapshot.mensaje_operacion && !snapshot.pulsos_emitidos && !snapshot.delta_aplicado_seg) {
+                estadoUI.dronCabinaId = snapshot.dron_enfocado_id;
+                estadoUI.dronInspectorId = snapshot.dron_enfocado_id;
             }
+        }
+
+        // Si el dron seleccionado fue eliminado o no existe, restaurar el primero de la flota
+        const dronExiste = snapshot.flota && snapshot.flota.some((d) => d.id_dron === estadoUI.dronCabinaId);
+        if (!dronExiste && snapshot.flota && snapshot.flota.length > 0) {
+            estadoUI.dronCabinaId = snapshot.flota[0].id_dron;
         }
 
         if (!estadoUI.selectsInicializados) {
@@ -305,14 +313,29 @@
         }
 
         // 2. Selector lateral de aeronaves en cabina
-        $("opsActiveCountLabel").textContent = `${snapshot.metricas.en_aire} en vuelo`;
+        const dronesEnTransito = snapshot.flota.filter((d) => d.en_vuelo_activo || d.retornando_a_base);
+        $("opsActiveCountLabel").textContent = `${dronesEnTransito.length} en vuelo`;
         $("opsDroneSelectorList").innerHTML = snapshot.flota
             .map((d) => {
                 const seleccionado = d.id_dron === estadoUI.dronCabinaId ? "is-selected" : "";
+                let badgeHtml = "";
+                if (d.en_vuelo_activo) {
+                    badgeHtml = `<span class="drone-mini-tag tag-flight">EN VUELO</span>`;
+                } else if (d.retornando_a_base) {
+                    badgeHtml = `<span class="drone-mini-tag tag-return">RETORNO</span>`;
+                } else if (!d.disponible) {
+                    badgeHtml = `<span class="drone-mini-tag tag-busy">OCUPADO</span>`;
+                } else {
+                    badgeHtml = `<span class="drone-mini-tag tag-standby">BASE</span>`;
+                }
+
                 return `
                     <button type="button" class="drone-mini-item ${seleccionado}" data-enfocar-cabina="${escaparHtml(d.id_dron)}">
                         <div class="drone-mini-left">
-                            <strong>${escaparHtml(d.id_dron)}</strong>
+                            <div class="drone-mini-title-row">
+                                <strong>${escaparHtml(d.id_dron)}</strong>
+                                ${badgeHtml}
+                            </div>
                             <small>${escaparHtml(d.modelo_aeronave)} · ${escaparHtml(d.categoria_etiqueta)}</small>
                         </div>
                         <div class="drone-mini-right">
@@ -323,6 +346,31 @@
                 `;
             })
             .join("");
+
+        // Tira de Flota en Tránsito Concurrente
+        const stripContainer = $("concurrentFleetStrip");
+        const chipsContainer = $("concurrentFleetChips");
+        if (stripContainer && chipsContainer) {
+            if (dronesEnTransito.length > 0) {
+                stripContainer.classList.remove("is-hidden");
+                chipsContainer.innerHTML = dronesEnTransito
+                    .map((df) => {
+                        const esFoco = df.id_dron === estadoUI.dronCabinaId;
+                        const prog = df.progreso_lineal ? Math.round(df.progreso_lineal.progreso_ciclo_pct || 0) : 0;
+                        const estadoCorto = df.retornando_a_base ? "Retorno" : "Vuelo";
+                        return `
+                            <button type="button" class="fleet-strip-chip ${esFoco ? "is-active" : ""}" data-enfocar-cabina="${escaparHtml(df.id_dron)}" title="Clic para enfocar telemetría de ${escaparHtml(df.id_dron)}">
+                                <span class="chip-status-dot ${df.retornando_a_base ? "is-return" : "is-flight"}"></span>
+                                <strong>${escaparHtml(df.id_dron)}</strong>
+                                <span class="chip-meta">${estadoCorto} ${prog}% · ${df.bateria.toFixed(0)}%</span>
+                            </button>
+                        `;
+                    })
+                    .join("");
+            } else {
+                stripContainer.classList.add("is-hidden");
+            }
+        }
 
         // 3. Cabina principal del dron enfocado
         const dron = snapshot.flota.find((d) => d.id_dron === estadoUI.dronCabinaId) || snapshot.flota[0];
@@ -518,7 +566,10 @@
         if (!snapshot) return;
 
         const dronActual = snapshot.flota.find((d) => d.id_dron === estadoUI.dronCabinaId);
-        const idObjetivo = dronActual && dronActual.en_vuelo_activo ? dronActual.id_dron : null;
+        // Simulación concurrente multidrón: id_dron null avanza todas las aeronaves en vuelo a la vez
+        const idObjetivo = estadoUI.simularSoloEnfocado && dronActual && dronActual.en_vuelo_activo
+            ? dronActual.id_dron
+            : null;
 
         try {
             const nuevoEstado = await peticionAPI("/api/simulacion/paso", {

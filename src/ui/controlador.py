@@ -895,7 +895,8 @@ class ControladorSkyRoute:
     def gestionar_telemetria_dron(self, datos: dict[str, Any]) -> dict[str, Any]:
         accion = str(datos.get("accion", "inyectar")).strip().lower()
         if accion == "refrescar_flota":
-            total = self.centro.refrescar_datos_flota()
+            resultado = self.centro.refrescar_datos_flota()
+            total = int(resultado)
             estado = self.obtener_estado_completo()
             estado["mensaje_operacion"] = f"Telemetría de {total} aeronaves sincronizada bajo demanda."
             return estado
@@ -1074,10 +1075,18 @@ class ControladorSkyRoute:
 
     def despegar_mision(
         self,
-        id_pedido: str,
+        id_pedido: str = "",
         modo_despacho: str = "TEMPORAL",
         actualizar_clima: bool = True,
+        id_dron: str = "",
     ) -> dict[str, Any]:
+        if not id_pedido and id_dron:
+            for p in self.centro.pedidos:
+                if p.dron_asignado and p.dron_asignado.id_dron == id_dron and p.estado == "ASIGNADO":
+                    pedido = p
+                    id_pedido = p.id_pedido
+                    break
+
         pedido = self._buscar_pedido(id_pedido)
         if pedido.estado != "ASIGNADO" or pedido.dron_asignado is None:
             raise ValueError(
@@ -1321,6 +1330,7 @@ class ControladorSkyRoute:
                 }
 
             pulso_item = {
+                "id_dron": dron.id_dron,
                 "indice": len(sesion["pulsos"]) + 1,
                 "t_seg": sesion["tiempo_acumulado_seg"],
                 "delta_t_seg": round(paso_seg, 1),
