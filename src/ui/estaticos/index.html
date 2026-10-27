@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SkyRoutes Drones · Sistema de Gestión y Telemetría</title>
+    <title>SkyRoute Drones · Centro de Control Metropolitano</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -14,9 +14,9 @@
 
     <div class="app-shell">
         <!-- ================================================================
-             ENCABEZADO PRINCIPAL (RF-05, RF-06)
+             BARRA FIJA SUPERIOR: BASE OLAYA HERRERA, CLIMA Y TOUR GUIADO
              ================================================================ -->
-        <header class="topbar reveal-step-1">
+        <header class="topbar">
             <div class="brand-group">
                 <div class="brand-emblem" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -24,612 +24,768 @@
                     </svg>
                 </div>
                 <div class="brand-copy">
-                    <h1 class="brand-title">SkyRoutes Drones</h1>
-                    <p class="brand-subtitle">Sistema de Gestión y Telemetría · Valle de Aburrá</p>
+                    <div class="brand-heading-row">
+                        <h1 class="brand-title">SkyRoute Drones</h1>
+                        <span class="base-badge" id="baseCoordsBadge">Base Olaya Herrera · 6.2196, -75.5868</span>
+                    </div>
+                    <p class="brand-subtitle">Centro de Control Metropolitano · Valle de Aburrá · Puente HTTP Nativo</p>
                 </div>
             </div>
 
             <div class="topbar-controls">
-                <!-- Indicador meteorológico Open-Meteo -->
-                <div class="climate-pill" id="climatePill" title="Telemetría atmosférica del Valle de Aburrá">
-                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+                <!-- Estación Meteorológica Open-Meteo por Nodo -->
+                <div class="climate-bar" title="ServicioClimaAburra · Open-Meteo en tiempo real">
+                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
                         <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
                         <path d="M12.6 19.4A2 2 0 1 0 14 16H2"/>
                     </svg>
-                    <span id="climateText">22.4 °C · 11.5 km/h</span>
-                </div>
-
-                <!-- Perfil de Usuario Activo (RF-06) -->
-                <button type="button" class="user-pill" id="btnOpenUserModal" title="Cambiar o registrar usuario (RF-06)">
-                    <span class="status-dot status-online"></span>
-                    <span class="user-meta">
-                        <strong id="activeUserName">Alejandro García</strong>
-                        <small id="activeUserRole">Rol: OPERADOR_VUELO</small>
-                    </span>
-                    <span class="rf-tag">[RF-06 Usuario]</span>
-                </button>
-
-                <!-- Control de escala temporal Delta-t -->
-                <div class="sim-controls" title="Velocidad del reloj de simulación (RelojSimulacion)">
-                    <div class="speed-group" role="group" aria-label="Multiplicador de tiempo">
-                        <button type="button" class="speed-btn is-active" data-speed="1">1x</button>
-                        <button type="button" class="speed-btn" data-speed="20">20x</button>
-                        <button type="button" class="speed-btn" data-speed="60">60x</button>
-                    </div>
-                    <button type="button" class="auto-tick-btn" id="btnAutoSync" aria-pressed="false" title="Activar sincronización periódica automática">
-                        <span class="pulse-ring"></span>
-                        <span>Auto Δt</span>
+                    <label for="selectNodoClima" class="sr-only">Nodo climático</label>
+                    <select id="selectNodoClima" class="climate-select" aria-label="Nodo meteorológico del Valle de Aburrá"></select>
+                    <span class="climate-readout" id="climateReadout">22.0 C · 11.5 km/h · 100%</span>
+                    <span class="status-dot status-online" id="climateSafetyDot" title="Estado de seguridad atmosférica"></span>
+                    <button type="button" class="icon-btn" id="btnConsultarClima" title="Consultar Open-Meteo en vivo para este nodo">
+                        <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                            <path d="M3 3v5h5"/>
+                            <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
+                            <path d="M16 16h5v5"/>
+                        </svg>
                     </button>
                 </div>
 
-                <!-- Botón Sincronización Bajo Demanda (RF-05) -->
-                <button type="button" class="sync-btn" id="btnSyncFleet">
-                    <svg class="icon-sm sync-icon" id="syncIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
-                        <path d="M3 3v5h5"/>
-                        <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/>
-                        <path d="M16 16h5v5"/>
+                <!-- Sesión de Usuario Activo -->
+                <button type="button" class="user-pill" id="btnIrUsuarios" title="Cambiar o registrar usuario activo">
+                    <span class="status-dot status-online"></span>
+                    <span class="user-meta">
+                        <strong id="topActiveUserName">Alejandro García Jiménez</strong>
+                        <small id="topActiveUserRole">CLIENTE · USR-01</small>
+                    </span>
+                </button>
+
+                <!-- Botón Tour Automatizado End-to-End (Opción 7 de ConsolaSkyRoute) -->
+                <button type="button" class="btn-primary btn-tour" id="btnIniciarTour">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
                     </svg>
-                    <span class="sync-label">Actualizar Flota</span>
-                    <span class="sync-time" id="lastSyncTime">--:--</span>
-                    <span class="rf-tag rf-tag-surface">[RF-05 Sincronización]</span>
+                    <span>Tour Guiado E2E</span>
                 </button>
             </div>
         </header>
 
         <!-- ================================================================
-             BANNER DE EXCEPCIONES DE DOMINIO Y ESTADO OPERACIONAL (RF-02)
+             NAVEGACIÓN POR ESPACIOS DE TRABAJO + MÉTRICAS GLOBALES
              ================================================================ -->
-        <section class="domain-banner reveal-step-2" id="domainBanner" aria-live="polite">
-            <div class="banner-nominal" id="bannerNominal">
-                <div class="banner-left">
-                    <span class="nominal-badge">SISTEMA NOMINAL</span>
-                    <span class="banner-text" id="operationToastText">
-                        espacio aéreo del Valle de Aburrá validado · 6 aeronaves polimórficas registradas en Torre de Control.
-                    </span>
-                </div>
-                <div class="banner-actions">
-                    <button type="button" class="ghost-link-btn" id="btnQuickTestError">
-                        Probar Excepción RF-02
-                    </button>
-                </div>
-            </div>
+        <div class="nav-and-kpis">
+            <nav class="workspace-nav" aria-label="Espacios de trabajo principales">
+                <button type="button" class="workspace-tab is-active" data-view="operaciones">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
+                    </svg>
+                    <span>Operaciones y Simulación</span>
+                    <span class="tab-counter" id="badgeOperaciones">0</span>
+                </button>
 
-            <div class="banner-error is-hidden" id="bannerError">
-                <div class="banner-left">
-                    <span class="error-rf-badge">[RF-02 Excepción de Dominio]</span>
-                    <strong class="error-prefix">Error Detectado:</strong>
-                    <code class="error-type-chip" id="errorTypeChip">BateriaInvalidaError</code>
-                    <span class="error-detail" id="errorDetailText"></span>
+                <button type="button" class="workspace-tab" data-view="flota">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="4" width="16" height="16" rx="2"/>
+                        <rect x="9" y="9" width="6" height="6"/>
+                        <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>
+                    </svg>
+                    <span>Flota y Fábrica</span>
+                    <span class="tab-counter" id="badgeFlota">6/6</span>
+                </button>
+
+                <button type="button" class="workspace-tab" data-view="despacho">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                        <circle cx="12" cy="10" r="3"/>
+                    </svg>
+                    <span>Despacho y Usuarios</span>
+                    <span class="tab-counter" id="badgeDespacho">0</span>
+                </button>
+
+                <button type="button" class="workspace-tab" data-view="polimorfismo">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
+                    </svg>
+                    <span>Comparador HU-10</span>
+                </button>
+
+                <button type="button" class="workspace-tab" data-view="bitacora">
+                    <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                        <polyline points="14 2 14 8 20 8"/>
+                        <line x1="16" y1="13" x2="8" y2="13"/>
+                        <line x1="16" y1="17" x2="8" y2="17"/>
+                    </svg>
+                    <span>Bitácora</span>
+                    <span class="tab-counter" id="badgeBitacora">1</span>
+                </button>
+            </nav>
+
+            <div class="kpi-strip">
+                <div class="kpi-chip">
+                    <span class="kpi-label">Disponibles</span>
+                    <strong class="kpi-value" id="kpiDisponibles">6</strong>
                 </div>
-                <div class="banner-right">
-                    <span class="error-rule-label" id="errorRuleLabel">Regla de Negocio #2</span>
-                    <button type="button" class="icon-close-btn" id="btnDismissError" aria-label="Cerrar alerta">
-                        <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M18 6 6 18M6 6l12 12"/>
-                        </svg>
-                    </button>
+                <div class="kpi-chip">
+                    <span class="kpi-label">En Vuelo</span>
+                    <strong class="kpi-value" id="kpiEnVuelo">0</strong>
+                </div>
+                <div class="kpi-chip">
+                    <span class="kpi-label">Completados</span>
+                    <strong class="kpi-value" id="kpiCompletados">0</strong>
+                </div>
+                <div class="kpi-chip">
+                    <span class="kpi-label">Reloj Sistema</span>
+                    <strong class="kpi-value mono" id="kpiRelojSistema">0s</strong>
                 </div>
             </div>
+        </div>
+
+        <!-- Banner dinámico de mensajes operativos y excepciones de dominio -->
+        <section id="feedbackBanner" class="feedback-banner is-hidden" role="status" aria-live="polite">
+            <div class="feedback-body">
+                <span class="feedback-badge" id="feedbackBadge">SISTEMA</span>
+                <div class="feedback-copy">
+                    <strong id="feedbackTitle">Operación registrada</strong>
+                    <p id="feedbackMessage">Detalle de la operación ejecutada.</p>
+                </div>
+            </div>
+            <button type="button" class="feedback-close" id="btnCloseFeedback" aria-label="Cerrar notificación">
+                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+                    <line x1="18" y1="6" x2="6" y2="18"/>
+                    <line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+            </button>
         </section>
 
         <!-- ================================================================
-             SELECTOR DE FLOTA POLIMÓRFICA (6 SUBCLASES ESPECIALIZADAS)
+             ESPACIO 1: OPERACIONES Y SIMULACIÓN TEMPORAL
              ================================================================ -->
-        <nav class="fleet-strip reveal-step-2" id="fleetStrip" aria-label="Aeronaves activas en la flota">
-            <!-- Renderizado dinámico por app.js -->
-        </nav>
-
-        <hr class="section-divider">
-
-        <!-- ================================================================
-             REJILLA PRINCIPAL DE 3 COLUMNAS (FIEL AL PROTOTIPO OFICIAL)
-             ================================================================ -->
-        <main class="dashboard-grid">
-
-            <!-- ============================================================
-                 COLUMNA 1: TELEMETRÍA E INSPECCIÓN TÉCNICA (RF-01, RF-04)
-                 ============================================================ -->
-            <div class="grid-column reveal-step-3">
-                <!-- Tarjeta 1: Entidad Dron en Monitoreo -->
-                <article class="panel-card">
-                    <div class="card-header">
-                        <div>
-                            <p class="eyebrow">ENTIDAD DRON EN MONITOREO</p>
-                            <h2 class="card-title-serif" id="droneMonitorTitle">DR-02 · RESCATE</h2>
-                            <p class="card-submeta" id="droneMonitorSubmeta">SkyRoutes-Hexa · Clase DronRescate</p>
-                        </div>
-                        <span class="rf-tag">[RF-01 Telemetría]</span>
-                    </div>
-
-                    <div class="metrics-duo">
-                        <!-- Nivel de Batería -->
-                        <div class="metric-tile">
-                            <div class="metric-top-row">
-                                <span class="metric-label">Nivel de Batería</span>
-                                <button type="button" class="mini-action-btn is-hidden" id="btnRechargeDrone" title="Recargar batería al 100% en plataforma">
-                                    Recargar
+        <main class="workspace-container">
+            <section id="view-operaciones" class="workspace-view is-active">
+                <div class="operations-grid">
+                    <!-- Columna Izquierda: Cola Operativa de Misiones y Aeronaves en Sesión -->
+                    <aside class="ops-sidebar">
+                        <article class="card">
+                            <div class="card-header">
+                                <div>
+                                    <span class="eyebrow">Cola de Control</span>
+                                    <h2 class="card-title">Misiones por Despachar</h2>
+                                </div>
+                                <button type="button" class="btn-ghost btn-sm" id="btnNuevoPedidoRapido">
+                                    + Nuevo Pedido
                                 </button>
                             </div>
-                            <div class="metric-value-group">
-                                <span class="metric-number" id="telemetryBattery">92.0</span>
-                                <span class="metric-unit">%</span>
-                            </div>
-                            <div class="progress-track" aria-hidden="true">
-                                <div class="progress-fill" id="batteryBarFill" style="width: 92%;"></div>
-                            </div>
-                            <span class="metric-footnote">Rango: [0.0, 100.0]%</span>
-                        </div>
+                            <div id="opsQueueList" class="stack-list"></div>
+                        </article>
 
-                        <!-- Altitud Actual -->
-                        <div class="metric-tile">
-                            <span class="metric-label">Altitud Actual</span>
-                            <div class="metric-value-group">
-                                <span class="metric-number" id="telemetryAltitude">0.0</span>
-                                <span class="metric-unit">m</span>
-                            </div>
-                            <span class="metric-footnote">Máx legal: 120.0 m</span>
-                            <div class="compliance-pill" id="uaeacBadge">
-                                <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M20 6 9 17l-5-5"/>
-                                </svg>
-                                <span>En norma UAEAC</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="kv-list">
-                        <div class="kv-row">
-                            <span class="kv-key">Estado de Motores:</span>
-                            <code class="state-chip state-chip-amber" id="telemetryMotors">'STANDBY'</code>
-                        </div>
-                        <div class="kv-row">
-                            <span class="kv-key">Coordenadas (Lat, Lon):</span>
-                            <code class="coord-chip" id="telemetryCoords">(6.2089, -75.5684)</code>
-                        </div>
-                        <div class="kv-row">
-                            <span class="kv-key">Odómetro / Consumo 10 km:</span>
-                            <span class="kv-inline-val" id="telemetryOdometer">0.00 km · 20.0%</span>
-                        </div>
-                    </div>
-
-                    <!-- Especificaciones propias de la subclase (Herencia Sprint 2) -->
-                    <div class="subclass-specs" id="subclassSpecsGrid">
-                        <!-- Renderizado dinámico -->
-                    </div>
-
-                    <!-- Acordeón para inyectar / validar trama manual (RF-01 / RF-02) -->
-                    <div class="telemetry-injector">
-                        <button type="button" class="injector-toggle" id="btnToggleInjector" aria-expanded="false">
-                            <span>Validar / Inyectar Trama de Telemetría</span>
-                            <svg class="icon-xs chevron-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="m6 9 6 6 6-6"/>
-                            </svg>
-                        </button>
-                        <form class="injector-body is-collapsed" id="formTelemetryInjector">
-                            <div class="form-row-3">
-                                <div class="field-group">
-                                    <label for="injBattery">Batería (%)</label>
-                                    <input type="number" step="0.1" id="injBattery" placeholder="85.0">
+                        <article class="card">
+                            <div class="card-header">
+                                <div>
+                                    <span class="eyebrow">Selector de Cabina</span>
+                                    <h2 class="card-title">Aeronave en Monitoreo</h2>
                                 </div>
-                                <div class="field-group">
-                                    <label for="injAltitude">Altitud (m)</label>
-                                    <input type="number" step="0.5" id="injAltitude" placeholder="0.0">
+                                <span class="mono-hint" id="opsActiveCountLabel">0 en vuelo</span>
+                            </div>
+                            <div id="opsDroneSelectorList" class="drone-mini-list"></div>
+                        </article>
+                    </aside>
+
+                    <!-- Columna Principal: Indicador Lineal Minimalista + Controles + Tabla de Pulsos -->
+                    <div class="ops-stage">
+                        <article class="card stage-card">
+                            <div class="stage-top">
+                                <div>
+                                    <div class="eyebrow-row">
+                                        <span class="eyebrow" id="simEyebrow">Cabina de Simulación Cinemática</span>
+                                        <span class="status-pill" id="simStatusPill">EN PLATAFORMA</span>
+                                    </div>
+                                    <h2 class="stage-title" id="simTitle">Selecciona o registra una misión para iniciar</h2>
+                                    <p class="stage-subtitle" id="simSubtitle">
+                                        Base Central Aeropuerto Olaya Herrera (6.219603, -75.586792) · Validación completa de autonomía ida y retorno.
+                                    </p>
                                 </div>
-                                <div class="field-group">
-                                    <label for="injMotors">Motores</label>
-                                    <select id="injMotors">
-                                        <option value="STANDBY">STANDBY</option>
-                                        <option value="APAGADOS">APAGADOS</option>
-                                        <option value="EN_VUELO">EN_VUELO</option>
-                                        <option value="EMERGENCIA">EMERGENCIA</option>
-                                    </select>
+
+                                <div class="stage-telemetry-pills">
+                                    <div class="tele-stat">
+                                        <span>Batería</span>
+                                        <strong id="simStatBateria">100.0%</strong>
+                                    </div>
+                                    <div class="tele-stat">
+                                        <span>Altitud</span>
+                                        <strong id="simStatAltitud">0.0 m</strong>
+                                    </div>
+                                    <div class="tele-stat">
+                                        <span>Vel. Efectiva</span>
+                                        <strong id="simStatVelocidad">60.0 km/h</strong>
+                                    </div>
+                                    <div class="tele-stat">
+                                        <span>Odómetro</span>
+                                        <strong id="simStatOdometro">0.00 km</strong>
+                                    </div>
                                 </div>
                             </div>
-                            <div class="preset-test-row">
-                                <span class="preset-caption">Pruebas RF-02:</span>
-                                <button type="button" class="chip-test-btn" data-test="bateria">Batería -5%</button>
-                                <button type="button" class="chip-test-btn" data-test="altitud">Altitud 145 m</button>
-                                <button type="button" class="chip-test-btn" data-test="coherencia">Motor incoherente</button>
+
+                            <!-- Indicador Lineal Minimalista de Progreso por Etapas (Base -> Destino -> Retorno) -->
+                            <div class="linear-journey" id="linearJourneyBox">
+                                <div class="journey-track-wrap">
+                                    <div class="journey-track">
+                                        <div class="journey-fill" id="journeyFill" style="width: 0%;"></div>
+                                    </div>
+                                    <div class="journey-marker" id="journeyMarker" style="left: 0%;" title="Posición cinemática actual">
+                                        <span class="marker-dot"></span>
+                                    </div>
+                                </div>
+
+                                <div class="journey-nodes">
+                                    <div class="journey-node is-current" id="stageNodeBase">
+                                        <span class="node-step">01 · Salida</span>
+                                        <strong>Base Olaya Herrera</strong>
+                                        <small id="stageBaseCoords">(6.2196, -75.5868)</small>
+                                    </div>
+
+                                    <div class="journey-node" id="stageNodeDestino">
+                                        <span class="node-step">02 · Objetivo</span>
+                                        <strong id="stageDestName">Sin destino activo</strong>
+                                        <small id="stageDestMeta">Esperando asignación</small>
+                                    </div>
+
+                                    <div class="journey-node" id="stageNodeRetorno">
+                                        <span class="node-step">03 · Cierre</span>
+                                        <strong id="stageReturnTitle">Retorno a Plataforma</strong>
+                                        <small id="stageReturnMeta">Motores en STANDBY</small>
+                                    </div>
+                                </div>
+
+                                <div class="journey-live-strip">
+                                    <span>GPS actual: <strong class="mono" id="simLiveGps">(6.21960, -75.58679)</strong></span>
+                                    <span>Instrumental: <strong class="mono" id="simLiveInstrument">EN ESPERA</strong></span>
+                                    <span>Restante etapa: <strong class="mono" id="simLiveRemaining">0.00 km</strong></span>
+                                    <span>Tiempo misión: <strong class="mono" id="simLiveElapsed">0.0 s</strong></span>
+                                </div>
                             </div>
-                            <button type="submit" class="btn-secondary btn-compact">Aplicar Trama a TelemetriaDrone</button>
-                        </form>
+
+                            <!-- Barra de Controles Reales (Automático Animado vs Paso a Paso Discreto Delta t) -->
+                            <div class="sim-toolbar">
+                                <div class="mode-segmented" role="group" aria-label="Modalidad de simulación temporal">
+                                    <button type="button" class="seg-btn is-active" data-sim-mode="paso" id="btnModePaso">
+                                        Paso a Paso Discreto
+                                    </button>
+                                    <button type="button" class="seg-btn" data-sim-mode="auto" id="btnModeAuto">
+                                        Automática Animada
+                                    </button>
+                                </div>
+
+                                <!-- Controles Paso a Paso -->
+                                <div class="sim-control-group" id="controlsPasoAPaso">
+                                    <label class="inline-field">
+                                        <span>Salto Delta t (s)</span>
+                                        <input type="number" id="inputDeltaT" min="5" max="600" step="5" value="30">
+                                    </label>
+                                    <button type="button" class="btn-primary" id="btnAvanzarPulso">
+                                        <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <polygon points="5 4 15 12 5 20 5 4"/>
+                                            <line x1="19" y1="5" x2="19" y2="19"/>
+                                        </svg>
+                                        <span>Avanzar Pulso</span>
+                                    </button>
+                                    <div class="quick-deltas">
+                                        <button type="button" class="chip-btn" data-quick-delta="15">+15s</button>
+                                        <button type="button" class="chip-btn" data-quick-delta="30">+30s</button>
+                                        <button type="button" class="chip-btn" data-quick-delta="60">+60s</button>
+                                    </div>
+                                </div>
+
+                                <!-- Controles Automático Animado -->
+                                <div class="sim-control-group is-hidden" id="controlsAutomatico">
+                                    <label class="inline-field">
+                                        <span>Pulso por ciclo</span>
+                                        <select id="selectAutoDelta">
+                                            <option value="15">15 s / ciclo</option>
+                                            <option value="25" selected>25 s / ciclo</option>
+                                            <option value="45">45 s / ciclo</option>
+                                        </select>
+                                    </label>
+                                    <button type="button" class="btn-primary" id="btnToggleAutoPlay">
+                                        <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <polygon points="5 3 19 12 5 21 5 3"/>
+                                        </svg>
+                                        <span id="labelToggleAutoPlay">Iniciar Reloj Continuo</span>
+                                    </button>
+                                </div>
+
+                                <!-- Maniobras de Seguridad en Vuelo -->
+                                <div class="sim-safety-actions">
+                                    <button type="button" class="btn-secondary btn-sm" id="btnOrdenarRetorno" title="RF-09 · Abortar misión actual y ordenar regreso inmediato a Olaya Herrera">
+                                        Retorno a Base
+                                    </button>
+                                    <button type="button" class="btn-ghost btn-sm is-hidden" id="btnAterrizarManual" title="Ejecutar finalizar_retorno_en_base() dentro del radio <= 0.05 km">
+                                        Confirmar Aterrizaje
+                                    </button>
+                                    <button type="button" class="btn-ghost btn-sm" id="btnReiniciarReloj" title="Reiniciar RelojSimulacion">
+                                        Reiniciar Reloj
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Certificación Final de Misión (Éxito o Emergencia 0.0%) -->
+                            <div id="missionCertCard" class="cert-card is-hidden"></div>
+                        </article>
+
+                        <!-- Tabla Cronológica de Pulsos en Vivo -->
+                        <article class="card">
+                            <div class="card-header">
+                                <div>
+                                    <span class="eyebrow">Integración Física y Geodésica</span>
+                                    <h3 class="card-title">Registro Cronológico de Pulsos de Simulación</h3>
+                                </div>
+                                <span class="mono-hint" id="pulseCountLabel">0 pulsos registrados</span>
+                            </div>
+
+                            <div class="table-wrap">
+                                <table class="data-table mono-table">
+                                    <thead>
+                                        <tr>
+                                            <th>T(s)</th>
+                                            <th>Fase Operacional</th>
+                                            <th>Coordenadas GPS</th>
+                                            <th>Avance</th>
+                                            <th>Restante</th>
+                                            <th>Batería</th>
+                                            <th>Estado</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="pulseTableBody">
+                                        <tr>
+                                            <td colspan="7" class="empty-cell">
+                                                Aún no se han ejecutado pulsos temporales para la aeronave seleccionada.
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </article>
                     </div>
-                </article>
+                </div>
+            </section>
 
-                <!-- Tarjeta 2: Inspección Técnica de la Entidad -->
-                <article class="panel-card">
-                    <div class="card-header">
-                        <h3 class="card-title-sans">Inspección Técnica de la Entidad</h3>
-                        <span class="rf-tag">[RF-04 Inspección]</span>
+            <!-- ================================================================
+                 ESPACIO 2: FLOTA ACTIVA, FÁBRICA Y MANTENIMIENTO
+                 ================================================================ -->
+            <section id="view-flota" class="workspace-view">
+                <div class="fleet-layout">
+                    <!-- Cuadrícula de Aeronaves + Alta desde FABRICA_DRONES -->
+                    <div class="fleet-main-col">
+                        <article class="card">
+                            <div class="card-header">
+                                <div>
+                                    <span class="eyebrow">Aeronaves Especializadas (6 Subclases)</span>
+                                    <h2 class="card-title">Estado de la Flota Activa</h2>
+                                </div>
+                                <button type="button" class="btn-secondary btn-sm" id="btnSincronizarFlota">
+                                    Sincronizar Telemetría (RF-05)
+                                </button>
+                            </div>
+                            <div id="fleetCardsGrid" class="fleet-cards-grid"></div>
+                        </article>
+
+                        <!-- Fábrica Dinámica de Drones (instanciar_dron_desde_fabrica) -->
+                        <article class="card">
+                            <div class="card-header">
+                                <div>
+                                    <span class="eyebrow">Patrón Fábrica · FABRICA_DRONES (HU-12)</span>
+                                    <h2 class="card-title">Incorporar Nueva Aeronave a la Flota</h2>
+                                </div>
+                                <span class="rf-tag">instanciar_dron_desde_fabrica</span>
+                            </div>
+
+                            <form id="formFabricaDron" class="form-grid">
+                                <div class="field">
+                                    <label for="fabCategoria">Categoría Especializada</label>
+                                    <select id="fabCategoria" required></select>
+                                </div>
+                                <div class="field">
+                                    <label for="fabIdDron">ID de Aeronave (opcional)</label>
+                                    <input type="text" id="fabIdDron" placeholder="Ej. DRON-ENT-07">
+                                </div>
+                                <div class="field">
+                                    <label for="fabModelo">Modelo de Aeronave</label>
+                                    <input type="text" id="fabModelo" required placeholder="Ej. AeroCourier-V4">
+                                </div>
+                                <div class="field">
+                                    <label for="fabVelocidad">Velocidad Crucero (km/h)</label>
+                                    <input type="number" id="fabVelocidad" min="10" max="180" step="1" value="60" required>
+                                </div>
+                                <div class="field">
+                                    <label for="fabBateria">Batería Inicial en Base (%)</label>
+                                    <input type="number" id="fabBateria" min="20" max="100" step="1" value="100" required>
+                                </div>
+
+                                <!-- Campos específicos dinámicos según la subclase elegida -->
+                                <div id="fabDynamicFields" class="dynamic-subfields"></div>
+
+                                <div class="form-actions-full">
+                                    <button type="submit" class="btn-primary">
+                                        Instanciar desde Fábrica y Agregar a Base
+                                    </button>
+                                </div>
+                            </form>
+                        </article>
                     </div>
 
-                    <div class="segmented-tabs" role="tablist" aria-label="Formato de inspección">
-                        <button type="button" class="seg-tab is-active" data-inspect="str" role="tab">
-                            Consola (__str__)
-                        </button>
-                        <button type="button" class="seg-tab" data-inspect="repr" role="tab">
-                            Desarrollo (__repr__)
-                        </button>
-                        <button type="button" class="seg-tab" data-inspect="sistemas" role="tab">
-                            Sistemas (ABC)
-                        </button>
+                    <!-- Columna Inspector Técnico: __str__, __repr__, Recarga e Inyección de Telemetría -->
+                    <aside class="fleet-inspector-col">
+                        <article class="card sticky-inspector">
+                            <div class="card-header">
+                                <div>
+                                    <span class="eyebrow">Inspector Técnico de Entidad</span>
+                                    <h2 class="card-title" id="inspDroneTitle">DRON-ENT-01</h2>
+                                </div>
+                                <span class="status-pill" id="inspDroneStatus">DISPONIBLE</span>
+                            </div>
+
+                            <!-- Bloque 1: Diagnóstico Polimórfico y Ficha Multilínea __str__ -->
+                            <div class="inspector-section">
+                                <span class="section-label">Diagnóstico de Sistemas Especializados</span>
+                                <p class="systems-callout" id="inspSystemsText"></p>
+
+                                <span class="section-label">Ficha Técnica Oficial (__str__)</span>
+                                <pre class="code-sheet" id="inspFichaStr"></pre>
+
+                                <span class="section-label">Representación Oficial (__repr__)</span>
+                                <code class="repr-box" id="inspFichaRepr"></code>
+                            </div>
+
+                            <!-- Bloque 2: Estación de Recarga en Base (dron.recargar_bateria) -->
+                            <div class="inspector-section">
+                                <div class="section-row">
+                                    <span class="section-label">Estación de Recarga en Base</span>
+                                    <span class="mono-hint">dron.recargar_bateria()</span>
+                                </div>
+                                <div class="recharge-row">
+                                    <input type="range" id="rangeRecarga" min="20" max="100" step="5" value="100">
+                                    <span class="mono recharge-val" id="labelRecargaVal">100%</span>
+                                    <button type="button" class="btn-primary btn-sm" id="btnEjecutarRecarga">
+                                        Recargar
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Bloque 3: Inyector Manual de Telemetría y Validación RN-01..RN-05 -->
+                            <div class="inspector-section">
+                                <div class="section-row">
+                                    <span class="section-label">Inyector de Trama Telemetría (RF-01 / RF-02)</span>
+                                </div>
+                                <div class="preset-chips">
+                                    <button type="button" class="chip-btn" data-tele-preset="nominal">Base Nominal</button>
+                                    <button type="button" class="chip-btn" data-tele-preset="bateria_baja">Batería 12%</button>
+                                    <button type="button" class="chip-btn" data-tele-preset="error_altitud">Probar &gt;120 m</button>
+                                    <button type="button" class="chip-btn" data-tele-preset="error_aburra">Probar Fuera Aburrá</button>
+                                </div>
+
+                                <form id="formTelemetriaManual" class="compact-tele-form">
+                                    <div class="tele-grid-2">
+                                        <div class="field">
+                                            <label for="teleBat">Batería (%)</label>
+                                            <input type="number" id="teleBat" step="0.5" value="100">
+                                        </div>
+                                        <div class="field">
+                                            <label for="teleAlt">Altitud (m)</label>
+                                            <input type="number" id="teleAlt" step="1" value="0">
+                                        </div>
+                                        <div class="field">
+                                            <label for="teleMotores">Motores</label>
+                                            <select id="teleMotores">
+                                                <option value="STANDBY">STANDBY</option>
+                                                <option value="APAGADOS">APAGADOS</option>
+                                                <option value="EN_VUELO">EN_VUELO</option>
+                                                <option value="EMERGENCIA">EMERGENCIA</option>
+                                            </select>
+                                        </div>
+                                        <div class="field">
+                                            <label for="teleLat">Latitud</label>
+                                            <input type="number" id="teleLat" step="0.0001" value="6.2196">
+                                        </div>
+                                        <div class="field">
+                                            <label for="teleLon">Longitud</label>
+                                            <input type="number" id="teleLon" step="0.0001" value="-75.5868">
+                                        </div>
+                                        <div class="field field-end">
+                                            <button type="submit" class="btn-secondary btn-full">Validar e Inyectar</button>
+                                        </div>
+                                    </div>
+                                </form>
+                            </div>
+
+                            <!-- Bloque 4: Bitácora Inmutable historial_telemetria -->
+                            <div class="inspector-section">
+                                <div class="section-row">
+                                    <span class="section-label">Bitácora Inmutable (historial_telemetria)</span>
+                                    <span class="mono-hint" id="inspTeleCount">1 trama</span>
+                                </div>
+                                <div class="immutable-log-list" id="inspTeleHistory"></div>
+                            </div>
+                        </article>
+                    </aside>
+                </div>
+            </section>
+
+            <!-- ================================================================
+                 ESPACIO 3: DESPACHO, GEOCODIFICACIÓN ARCGIS Y USUARIOS
+                 ================================================================ -->
+            <section id="view-despacho" class="workspace-view">
+                <div class="dispatch-layout">
+                    <!-- Columna Izquierda: Crear Pedido + Gestión de Usuarios -->
+                    <div class="dispatch-forms-col">
+                        <article class="card">
+                            <div class="card-header">
+                                <div>
+                                    <span class="eyebrow">Registro de Solicitud (ArcGIS / OSM / Local)</span>
+                                    <h2 class="card-title">Nuevo Pedido de Operación Aérea</h2>
+                                </div>
+                                <span class="rf-tag">RN-05 Valle de Aburrá</span>
+                            </div>
+
+                            <form id="formNuevoPedido" class="stack-form">
+                                <div class="form-row-2">
+                                    <div class="field">
+                                        <label for="pedUsuario">Usuario Solicitante</label>
+                                        <select id="pedUsuario" required></select>
+                                    </div>
+                                    <div class="field">
+                                        <label for="pedCategoria">Categoría Requerida</label>
+                                        <select id="pedCategoria" required></select>
+                                    </div>
+                                </div>
+
+                                <div class="form-row-2">
+                                    <div class="field">
+                                        <label for="pedPeso">Peso de Carga / Equipo (kg)</label>
+                                        <input type="number" id="pedPeso" min="0" max="500" step="0.1" value="1.5" required>
+                                    </div>
+                                    <div class="field">
+                                        <label for="pedIdOpcional">ID Pedido (opcional, autogenerado)</label>
+                                        <input type="text" id="pedIdOpcional" placeholder="Ej. PED-1040">
+                                    </div>
+                                </div>
+
+                                <!-- Conmutador Dirección vs Coordenadas -->
+                                <div class="mode-segmented" role="group" aria-label="Método de destino">
+                                    <button type="button" class="seg-btn is-active" data-dest-mode="direccion" id="btnModoDireccion">
+                                        Dirección Vial o Hito (Geocodificador)
+                                    </button>
+                                    <button type="button" class="seg-btn" data-dest-mode="coordenadas" id="btnModoCoordenadas">
+                                        Coordenadas Directas (Lat, Lon)
+                                    </button>
+                                </div>
+
+                                <!-- Bloque Dirección Textual -->
+                                <div id="bloqueDestinoDireccion" class="dest-block">
+                                    <div class="field">
+                                        <label for="pedDireccion">Dirección en el Valle de Aburrá</label>
+                                        <div class="input-with-action">
+                                            <input type="text" id="pedDireccion" placeholder="Ej. Cra 80 # 30-15, Medellín o Parque El Poblado">
+                                            <button type="button" class="btn-secondary" id="btnVerificarDireccion">
+                                                Verificar GPS
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div class="suggestion-bar">
+                                        <span class="suggestion-label">Ejemplos rápidos:</span>
+                                        <div id="addressSuggestions" class="preset-chips"></div>
+                                    </div>
+
+                                    <div id="geoPreviewCard" class="geo-preview is-hidden"></div>
+                                </div>
+
+                                <!-- Bloque Coordenadas Explícitas -->
+                                <div id="bloqueDestinoCoordenadas" class="dest-block is-hidden">
+                                    <div class="form-row-2">
+                                        <div class="field">
+                                            <label for="pedLatitud">Latitud Norte [5.9667, 6.5000]</label>
+                                            <input type="number" id="pedLatitud" step="0.0001" placeholder="6.2089">
+                                        </div>
+                                        <div class="field">
+                                            <label for="pedLongitud">Longitud Oeste [-75.7167, -75.3500]</label>
+                                            <input type="number" id="pedLongitud" step="0.0001" placeholder="-75.5684">
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <button type="submit" class="btn-primary btn-full">
+                                    Registrar Pedido en Centro de Control
+                                </button>
+                            </form>
+                        </article>
+
+                        <!-- Gestión de Usuarios -->
+                        <article class="card" id="cardGestionUsuarios">
+                            <div class="card-header">
+                                <div>
+                                    <span class="eyebrow">Perfiles y Roles Autorizados (RF-06)</span>
+                                    <h2 class="card-title">Usuarios Registrados</h2>
+                                </div>
+                            </div>
+
+                            <div id="usersListContainer" class="users-list"></div>
+
+                            <form id="formNuevoUsuario" class="user-add-form">
+                                <div class="form-row-3">
+                                    <div class="field">
+                                        <label for="usrId">ID (opcional)</label>
+                                        <input type="text" id="usrId" placeholder="USR-04">
+                                    </div>
+                                    <div class="field">
+                                        <label for="usrNombre">Nombre Completo</label>
+                                        <input type="text" id="usrNombre" required placeholder="Nombre y apellido">
+                                    </div>
+                                    <div class="field">
+                                        <label for="usrRol">Rol Oficial</label>
+                                        <select id="usrRol" required>
+                                            <option value="CLIENTE">CLIENTE</option>
+                                            <option value="OPERADOR_VUELO">OPERADOR_VUELO</option>
+                                            <option value="ADMINISTRADOR">ADMINISTRADOR</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button type="submit" class="btn-secondary btn-full">
+                                    Registrar Nuevo Usuario
+                                </button>
+                            </form>
+                        </article>
                     </div>
 
-                    <pre class="console-box" id="entityInspectionOutput">Cargando representación técnica...</pre>
-                    <p class="card-footer-note" id="inspectionFooterNote">Método dunder implementado polimórficamente en src/flota/</p>
-                </article>
-            </div>
+                    <!-- Columna Derecha: Bandeja Completa de Pedidos y Estados -->
+                    <div class="dispatch-orders-col">
+                        <article class="card">
+                            <div class="card-header">
+                                <div>
+                                    <span class="eyebrow">Trazabilidad de Solicitudes</span>
+                                    <h2 class="card-title">Bandeja General de Pedidos</h2>
+                                </div>
+                                <div class="filter-pills" id="orderStateFilters">
+                                    <button type="button" class="chip-btn is-active" data-order-filter="TODOS">Todos</button>
+                                    <button type="button" class="chip-btn" data-order-filter="PENDIENTE">Pendientes</button>
+                                    <button type="button" class="chip-btn" data-order-filter="ASIGNADO">Asignados</button>
+                                    <button type="button" class="chip-btn" data-order-filter="EN_TRANSITO">En Tránsito</button>
+                                    <button type="button" class="chip-btn" data-order-filter="COMPLETADO">Completados</button>
+                                    <button type="button" class="chip-btn" data-order-filter="CANCELADO">Cancelados</button>
+                                </div>
+                            </div>
 
-            <!-- ============================================================
-                 COLUMNA 2: SOLICITUDES Y ASIGNACIÓN (RF-07, RF-08, HU-12)
-                 ============================================================ -->
-            <div class="grid-column reveal-step-4">
-                <!-- Tarjeta 1: Nueva Solicitud de Servicio -->
-                <article class="panel-card">
-                    <div class="card-header">
+                            <div id="ordersBoardList" class="orders-board-list"></div>
+                        </article>
+                    </div>
+                </div>
+            </section>
+
+            <!-- ================================================================
+                 ESPACIO 4: COMPARADOR POLIMÓRFICO DE EFICIENCIA (HU-10)
+                 ================================================================ -->
+            <section id="view-polimorfismo" class="workspace-view">
+                <article class="card">
+                    <div class="poly-header">
                         <div>
-                            <p class="eyebrow">GESTIÓN DE PEDIDOS</p>
-                            <h2 class="card-title-serif">Nueva Solicitud</h2>
-                        </div>
-                        <span class="rf-tag">[RF-07 Solicitud]</span>
-                    </div>
-
-                    <form id="formNewOrder" class="order-form" novalidate>
-                        <p class="field-section-label">Seleccionar Categoría del Dron (6 autorizadas):</p>
-
-                        <div class="category-grid" id="categoryGrid">
-                            <button type="button" class="cat-card" data-category="ENTREGA_LIGERA">
-                                <svg class="cat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/>
-                                    <path d="m3.3 7 8.7 5 8.7-5"/>
-                                    <path d="M12 22V12"/>
-                                </svg>
-                                <span>Entrega Ligera</span>
-                            </button>
-
-                            <button type="button" class="cat-card" data-category="CARGA_PESADA">
-                                <svg class="cat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="m16 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
-                                    <path d="m2 16 3-8 3 8c-.87.65-1.92 1-3 1s-2.13-.35-3-1Z"/>
-                                    <path d="M7 21h10"/>
-                                    <path d="M12 3v18"/>
-                                    <path d="M3 7h2c2 0 5-1 7-2 2 1 5 2 7 2h2"/>
-                                </svg>
-                                <span>Carga Pesada</span>
-                            </button>
-
-                            <button type="button" class="cat-card" data-category="VIGILANCIA">
-                                <svg class="cat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
-                                </svg>
-                                <span>Vigilancia</span>
-                            </button>
-
-                            <button type="button" class="cat-card" data-category="MAPEO_TOPOGRAFICO">
-                                <svg class="cat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z"/>
-                                    <path d="M15 5.764v15"/>
-                                    <path d="M9 3.236v15"/>
-                                </svg>
-                                <span>Mapeo Topográfico</span>
-                            </button>
-
-                            <button type="button" class="cat-card" data-category="INSPECCION_INFRAESTRUCTURA">
-                                <svg class="cat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <path d="M4.9 19.1C1 15.2 1 8.8 4.9 4.9"/>
-                                    <path d="M7.8 16.2c-2.3-2.3-2.3-6.1 0-8.5"/>
-                                    <circle cx="12" cy="12" r="2"/>
-                                    <path d="M16.2 7.8c2.3 2.3 2.3 6.1 0 8.5"/>
-                                    <path d="M19.1 4.9C23 8.8 23 15.1 19.1 19"/>
-                                </svg>
-                                <span>Inspección Infraest.</span>
-                            </button>
-
-                            <button type="button" class="cat-card is-selected" data-category="BUSQUEDA_RESCATE">
-                                <svg class="cat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round">
-                                    <circle cx="12" cy="12" r="10"/>
-                                    <path d="M12 8v8"/>
-                                    <path d="M8 12h8"/>
-                                </svg>
-                                <span>Búsqueda y Rescate</span>
-                            </button>
+                            <span class="eyebrow">Demostración de Polimorfismo · predecir_viabilidad_mision(distancia_km)</span>
+                            <h2 class="card-title">Comparativa Polimórfica de Consumo Energético y Autonomía (HU-10)</h2>
+                            <p class="card-desc">
+                                Evalúa simultáneamente toda la flota activa con su estado real de batería. Cada subclase calcula su propio gasto energético y diagnóstico según sus sensores, rotores y equipamiento.
+                            </p>
                         </div>
 
-                        <div class="form-row-2">
-                            <div class="field-group">
-                                <label for="inputOrderId">ID Pedido</label>
-                                <div class="input-with-action">
-                                    <input type="text" id="inputOrderId" value="PED-4030" required>
-                                    <button type="button" class="inline-gen-btn" id="btnGenOrderId" title="Generar nuevo identificador único">Auto</button>
-                                </div>
+                        <div class="poly-controls">
+                            <label class="inline-field">
+                                <span>Distancia a evaluar (km)</span>
+                                <input type="number" id="inputPolyDist" min="1" max="120" step="0.5" value="15.0">
+                            </label>
+                            <input type="range" id="rangePolyDist" min="1" max="60" step="0.5" value="15.0">
+                            <div class="preset-chips">
+                                <button type="button" class="chip-btn" data-poly-dist="5">5 km</button>
+                                <button type="button" class="chip-btn is-active" data-poly-dist="15">15 km</button>
+                                <button type="button" class="chip-btn" data-poly-dist="30">30 km</button>
+                                <button type="button" class="chip-btn" data-poly-dist="48">48 km</button>
                             </div>
-                            <div class="field-group">
-                                <label for="inputOrderWeight">Peso Carga (kg)</label>
-                                <input type="number" id="inputOrderWeight" step="0.1" min="0" value="2.4">
-                            </div>
-                        </div>
-
-                        <div class="field-group">
-                            <label for="selectDestinationPreset">Destino (Puntos en Valle de Aburrá)</label>
-                            <select id="selectDestinationPreset">
-                                <!-- Se hidrata desde destinos_referencia -->
-                            </select>
-                        </div>
-
-                        <div class="form-row-2 coord-inputs-row" id="customDestinationFields">
-                            <div class="field-group">
-                                <label for="inputDestLat">Latitud Norte</label>
-                                <input type="number" id="inputDestLat" step="0.0001" value="6.2620">
-                            </div>
-                            <div class="field-group">
-                                <label for="inputDestLon">Longitud Oeste</label>
-                                <input type="number" id="inputDestLon" step="0.0001" value="-75.5780">
-                            </div>
-                        </div>
-
-                        <div class="field-group is-hidden" id="addressGeocoderField">
-                            <label for="inputDestAddress">Dirección Textual (Geocodificador OSM / Local)</label>
-                            <input type="text" id="inputDestAddress" placeholder="Ej. Parque Berrío, Universidad de Medellín, Envigado...">
-                        </div>
-
-                        <button type="submit" class="btn-primary">
-                            Registrar Solicitud en Sistema
-                        </button>
-                    </form>
-                </article>
-
-                <!-- Tarjeta 2: Cruce y Asignación de Recursos -->
-                <article class="panel-card">
-                    <div class="card-header">
-                        <div>
-                            <h3 class="card-title-sans">Cruce y Asignación de Recursos</h3>
-                            <p class="card-submeta">Orquestador Polimórfico · SistemaCentroControl</p>
-                        </div>
-                        <span class="rf-tag">[RF-08 Asignación]</span>
-                    </div>
-
-                    <div class="order-selector-bar">
-                        <label for="selectActiveOrder" class="sr-only">Seleccionar pedido</label>
-                        <select id="selectActiveOrder" class="order-dropdown">
-                            <!-- Pedidos registrados -->
-                        </select>
-                        <span class="order-state-pill" id="selectedOrderStateBadge">PENDIENTE</span>
-                    </div>
-
-                    <div class="assignment-summary" id="assignmentSummaryBox">
-                        <div class="summary-line">
-                            <span>Pedido Seleccionado:</span>
-                            <strong class="mono-text" id="assignOrderId">#PED-4029</strong>
-                        </div>
-                        <div class="summary-line">
-                            <span>Categoría Requerida:</span>
-                            <strong id="assignCategory">Búsqueda y Rescate</strong>
-                        </div>
-                        <div class="summary-line">
-                            <span>Dron Compatible:</span>
-                            <span class="drone-match-badge" id="assignDroneBadge">DR-02 (Disponible)</span>
-                        </div>
-                        <div class="summary-line viability-line" id="assignViabilityRow">
-                            <span>Consumo Estimado (HU-10):</span>
-                            <span class="mono-text" id="assignViabilityText">--</span>
                         </div>
                     </div>
 
-                    <div class="assignment-actions" id="assignmentActionsGroup">
-                        <button type="button" class="btn-outline" id="btnAssignOrder">
-                            Confirmar Asignación de Dron
-                        </button>
-                        <div class="dispatch-split is-hidden" id="dispatchButtonsWrap">
-                            <button type="button" class="btn-primary" id="btnDispatchSimulated">
-                                Despegar Misión (Vuelo Δt)
-                            </button>
-                            <button type="button" class="btn-outline btn-compact" id="btnDispatchInstant" title="Ejecuta centro_control.despachar_mision() completando entrega e iniciando retorno">
-                                Despacho Directo
-                            </button>
-                        </div>
+                    <div id="polyBarsContainer" class="poly-bars-grid"></div>
+
+                    <div class="table-wrap">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Aeronave</th>
+                                    <th>Subclase / Categoría</th>
+                                    <th>Tasa</th>
+                                    <th>Batería Actual</th>
+                                    <th>Consumo Proyectado</th>
+                                    <th>Remanente</th>
+                                    <th>Viable</th>
+                                    <th>Diagnóstico Polimórfico de Autonomía</th>
+                                </tr>
+                            </thead>
+                            <tbody id="polyTableBody"></tbody>
+                        </table>
                     </div>
                 </article>
-            </div>
+            </section>
 
-            <!-- ============================================================
-                 COLUMNA 3: NAVEGACIÓN GEODÉSICA Y RETORNO (RF-03, RF-09, RF-10)
-                 ============================================================ -->
-            <div class="grid-column reveal-step-5">
-                <!-- Tarjeta 1: Ruta y Navegación -->
-                <article class="panel-card">
-                    <div class="card-header">
-                        <h2 class="card-title-serif">Ruta y Navegación</h2>
-                        <div class="rf-tag-stack">
-                            <span class="rf-tag">[RF-03 Haversine]</span>
-                            <span class="rf-tag">[RF-10 ETA]</span>
-                        </div>
-                    </div>
-
-                    <!-- Visualizador Vectorial de Trayectoria Geodésica -->
-                    <div class="route-visualizer">
-                        <div class="route-nodes-row">
-                            <div class="route-node-pill route-node-origin">
-                                <span class="node-title">Base Medellín</span>
-                                <code id="routeOriginCoords">(6.2089, -75.5684)</code>
+            <!-- ================================================================
+                 ESPACIO 5: BITÁCORA DE AUDITORÍA Y REPORTE DE TORRE
+                 ================================================================ -->
+            <section id="view-bitacora" class="workspace-view">
+                <div class="audit-layout">
+                    <article class="card">
+                        <div class="card-header">
+                            <div>
+                                <span class="eyebrow">Auditoría Inmutable de Eventos · LogOperacion</span>
+                                <h2 class="card-title">Bitácora Operacional del Centro de Control</h2>
                             </div>
-
-                            <div class="route-vector-track" aria-hidden="true">
-                                <svg class="route-svg" viewBox="0 0 120 36" preserveAspectRatio="none">
-                                    <line x1="6" y1="18" x2="114" y2="18" class="route-dash-line"/>
-                                    <circle cx="6" cy="18" r="3.5" class="route-endpoint"/>
-                                    <circle cx="114" cy="18" r="3.5" class="route-endpoint route-endpoint-dest"/>
-                                </svg>
-                                <div class="route-plane-marker" id="routePlaneMarker" style="left: 0%;">
-                                    <svg viewBox="0 0 24 24" fill="currentColor">
-                                        <path d="M21 16v-2l-8-5V3.5c0-.83-.67-1.5-1.5-1.5S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5l8 2.5z"/>
-                                    </svg>
-                                </div>
-                            </div>
-
-                            <div class="route-node-pill route-node-dest">
-                                <span class="node-title" id="routeDestTitle">Destino</span>
-                                <code id="routeDestCoords">(6.2620, -75.5780)</code>
+                            <div class="audit-controls">
+                                <input type="search" id="inputBuscarLog" class="search-input" placeholder="Filtrar por evento, dron, pedido o detalle...">
+                                <select id="selectFormatoLog" class="compact-select">
+                                    <option value="tabla">Vista Estructurada</option>
+                                    <option value="consola">Formato Oficial (formatear_registro)</option>
+                                </select>
                             </div>
                         </div>
-                        <p class="route-formula-caption">
-                            Radio terrestre: R = 6,371.0 km (Fórmula Ortodrómica de Haversine)
-                        </p>
-                    </div>
 
-                    <div class="metrics-duo">
-                        <div class="metric-tile metric-tile-centered">
-                            <span class="metric-eyebrow">DISTANCIA ORTODRÓMICA</span>
-                            <div class="metric-value-group metric-value-centered">
-                                <span class="metric-number" id="navDistanceKm">5.99</span>
-                                <span class="metric-unit">km</span>
-                            </div>
-                            <span class="metric-footnote">CalculadorGeodesico</span>
+                        <div id="auditTableContainer" class="table-wrap">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>ID Registro</th>
+                                        <th>Fecha y Hora</th>
+                                        <th>Evento</th>
+                                        <th>Dron</th>
+                                        <th>Pedido</th>
+                                        <th>Detalle Operativo</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="auditTableBody"></tbody>
+                            </table>
                         </div>
 
-                        <div class="metric-tile metric-tile-centered">
-                            <span class="metric-eyebrow">TIEMPO ESTIMADO (ETA)</span>
-                            <div class="metric-value-group metric-value-centered">
-                                <span class="metric-number" id="navEtaMin">5.5</span>
-                                <span class="metric-unit">min</span>
-                            </div>
-                            <span class="metric-footnote" id="navCruiseSpeed">Vel. crucero: 65 km/h</span>
-                        </div>
-                    </div>
-                </article>
+                        <pre id="auditRawContainer" class="code-sheet is-hidden"></pre>
+                    </article>
 
-                <!-- Tarjeta 2: Retorno Obligatorio a Base -->
-                <article class="panel-card">
-                    <div class="card-header">
-                        <h3 class="card-title-sans">Retorno Obligatorio a Base</h3>
-                        <span class="rf-tag">[RF-09 Retorno Base]</span>
-                    </div>
-
-                    <div class="return-box" id="returnStatusBox">
-                        <div class="return-top-row">
-                            <div class="lock-status">
-                                <svg class="icon-sm" id="returnLockIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
-                                    <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
-                                </svg>
-                                <strong id="returnLockTitle">Disponibilidad Habilitada</strong>
-                            </div>
-                            <code class="flag-badge" id="returnFlagBadge">retornando_a_base = False</code>
-                        </div>
-
-                        <p class="return-rule-copy">
-                            Regla de Negocio: El dron no se marca como <code>disponible = True</code> hasta que alcance con tolerancia física (≤ 50 m) las coordenadas de la Base Medellín.
-                        </p>
-
-                        <div class="progress-track">
-                            <div class="progress-fill" id="returnProgressBar" style="width: 0%;"></div>
-                        </div>
-
-                        <div class="return-progress-meta">
-                            <span id="returnDistanceLabel">En plataforma base (0.00 km)</span>
-                            <strong id="returnPctLabel">0% completado</strong>
-                        </div>
-                    </div>
-
-                    <div class="return-actions-row">
-                        <button type="button" class="btn-secondary is-hidden" id="btnTriggerReturn">
-                            Iniciar Retorno a Base
-                        </button>
-                        <button type="button" class="btn-outline" id="btnFinalizeReturn">
-                            Finalizar Retorno en Base
-                        </button>
-                    </div>
-                </article>
-            </div>
+                    <aside class="audit-side">
+                        <article class="card">
+                            <span class="eyebrow">Estado Textual del Orquestador</span>
+                            <h3 class="card-title">SistemaCentroControl (__str__)</h3>
+                            <pre class="code-sheet" id="torreStrBox"></pre>
+                            <span class="section-label">Representación (__repr__)</span>
+                            <code class="repr-box" id="torreReprBox"></code>
+                        </article>
+                    </aside>
+                </div>
+            </section>
         </main>
-
-        <!-- ================================================================
-             BITÁCORA DE AUDITORÍA INMUTABLE (LogOperacion)
-             ================================================================ -->
-        <section class="audit-section reveal-step-5">
-            <button type="button" class="audit-header-btn" id="btnToggleAudit" aria-expanded="false">
-                <div class="audit-title-group">
-                    <span class="audit-indicator"></span>
-                    <strong>Bitácora de Auditoría Operacional</strong>
-                    <span class="mono-muted" id="auditCountBadge">0 eventos registrados</span>
-                </div>
-                <span class="audit-toggle-hint">Mostrar / Ocultar registros LogOperacion</span>
-            </button>
-            <div class="audit-table-wrap is-collapsed" id="auditPanelBody">
-                <table class="audit-table">
-                    <thead>
-                        <tr>
-                            <th>Hora</th>
-                            <th>Evento</th>
-                            <th>Dron</th>
-                            <th>Pedido</th>
-                            <th>Detalle Técnico</th>
-                        </tr>
-                    </thead>
-                    <tbody id="auditTableBody">
-                        <!-- Filas dinámicas -->
-                    </tbody>
-                </table>
-            </div>
-        </section>
-
-        <!-- ================================================================
-             PIE DE PÁGINA ACADÉMICO
-             ================================================================ -->
-        <footer class="app-footer">
-            <span>SkyRoutes Drones · Interfaz Gráfica Minimalista sobre http.server Nativo</span>
-            <span>Universidad de Medellín (UDEM) · Algoritmos POO 2026-2</span>
-        </footer>
-    </div>
-
-    <!-- ====================================================================
-         MODAL DE GESTIÓN DE USUARIOS (RF-06)
-         ==================================================================== -->
-    <div class="modal-backdrop is-hidden" id="userModalBackdrop" role="dialog" aria-modal="true" aria-labelledby="userModalTitle">
-        <div class="modal-card">
-            <div class="card-header">
-                <div>
-                    <p class="eyebrow">CONTROL DE ACCESO Y PERFILES</p>
-                    <h3 class="card-title-serif" id="userModalTitle">Gestión de Usuarios</h3>
-                </div>
-                <button type="button" class="icon-close-btn" id="btnCloseUserModal" aria-label="Cerrar modal">
-                    <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M18 6 6 18M6 6l12 12"/>
-                    </svg>
-                </button>
-            </div>
-
-            <div class="field-group">
-                <label>Cambiar Sesión Activa</label>
-                <div class="user-switch-list" id="userSwitchList"></div>
-            </div>
-
-            <hr class="modal-divider">
-
-            <form id="formRegisterUser" class="user-register-form">
-                <p class="field-section-label">Registrar Nuevo Usuario en Plataforma (RF-06):</p>
-                <div class="form-row-2">
-                    <div class="field-group">
-                        <label for="newUserId">ID Usuario</label>
-                        <input type="text" id="newUserId" placeholder="USR-OPE-04" required>
-                    </div>
-                    <div class="field-group">
-                        <label for="newUserRole">Rol Autorizado</label>
-                        <select id="newUserRole">
-                            <option value="OPERADOR_VUELO">OPERADOR_VUELO</option>
-                            <option value="CLIENTE">CLIENTE</option>
-                            <option value="ADMINISTRADOR">ADMINISTRADOR</option>
-                        </select>
-                    </div>
-                </div>
-                <div class="field-group">
-                    <label for="newUserName">Nombre Completo</label>
-                    <input type="text" id="newUserName" placeholder="Ej. Mario Saldarriaga" required>
-                </div>
-                <button type="submit" class="btn-primary">Dar de Alta Usuario</button>
-            </form>
-        </div>
     </div>
 
     <script src="/app.js"></script>
