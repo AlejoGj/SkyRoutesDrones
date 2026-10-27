@@ -228,5 +228,13 @@ class DronEntregaLigera(Dron):
             f"{ficha_sin_cierre}\n"
             f"  Capacidad Máxima   : {self._capacidad_carga_kg:.1f} kg\n"
             f"  Refrigeración      : [{refri}] | Suelta Rápida: [{suelta}]\n"
+            f"  Eficiencia Consumo : 1.2% bat/km\n"
             f"{cierre}"
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"DronEntregaLigera(id_dron='{self.id_dron}', modelo_aeronave='{self.modelo_aeronave}', "
+            f"capacidad_carga_kg={self._capacidad_carga_kg}, mecanismo_suelta_rapida={self._mecanismo_suelta_rapida}, "
+            f"disponible={self.disponible})"
         )

@@ -229,6 +229,42 @@ class Dron(ABC):
     def inspeccionar_sistemas_especializados(self) -> str:
         ...
 
+    def predecir_viabilidad_mision(self, distancia_km: float) -> dict:
+        """
+        PILAR: POLIMORFISMO EN PREDICCIÓN ENERGÉTICA PRE-DESPEGUE (HU-10)
+        Evalúa si la aeronave cuenta con autonomía suficiente para cubrir la distancia proyectada.
+        Delega el cálculo a la fórmula polimórfica 'self.calcular_consumo_estimado(distancia_km)'.
+        """
+        if isinstance(distancia_km, bool) or not isinstance(distancia_km, (int, float)):
+            raise TypeError(f"La distancia debe ser numérica. Recibido: {type(distancia_km).__name__}")
+        if distancia_km < 0:
+            raise ValueError(f"La distancia no puede ser negativa. Recibido: {distancia_km}")
+
+        consumo_estimado = self.calcular_consumo_estimado(distancia_km)
+        bateria_actual = self.telemetria.bateria if self.telemetria is not None else 0.0
+        tiene_telemetria = self.telemetria is not None
+
+        viable = tiene_telemetria and (bateria_actual >= consumo_estimado)
+        bateria_remanente = max(0.0, bateria_actual - consumo_estimado) if viable else 0.0
+
+        if not tiene_telemetria:
+            motivo = "Misión no viable: el dron no tiene telemetría asignada."
+        elif bateria_actual < consumo_estimado:
+            motivo = f"Misión no viable: batería insuficiente ({bateria_actual:.1f}% actual vs. {consumo_estimado:.1f}% requerido)."
+        else:
+            motivo = f"Misión viable: autonomía suficiente con remanente proyectado de {bateria_remanente:.1f}%."
+
+        return {
+            "id_dron": self.id_dron,
+            "tipo_dron": self.__class__.__name__,
+            "distancia_km": round(float(distancia_km), 2),
+            "consumo_estimado_pct": round(consumo_estimado, 2),
+            "bateria_actual_pct": round(bateria_actual, 2),
+            "bateria_remanente_pct": round(bateria_remanente, 2),
+            "mision_viable": viable,
+            "diagnostico_autonomia": motivo,
+        }
+
 
     def actualizar_estado_disponibilidad(self, disponible: bool) -> None:
         # Agrego Funcionalidad. HU-03, UML, Responsabilidades no coinciden. Se agrega el atributo disponible (como se dice en el UML) para poder actualizar el estado de disponibilidad del dron.
@@ -408,4 +444,4 @@ class Dron(ABC):
             "estado_mision": "COMPLETADA_EN_DESTINO",
             "coordenadas_llegada": self.telemetria.coordenadas if self.telemetria else None
         }
-
+        
