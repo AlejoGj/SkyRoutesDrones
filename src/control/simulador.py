@@ -2,12 +2,13 @@
 # Responsable: Módulo de Control y Simulación
 
 from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from src.geodesia.calculador import CalculadorGeodesico, ICalculadorGeodesico
 from src.excepciones.errores import TelemetriaNoAsignadaError
 
 if TYPE_CHECKING:
     from src.flota.dron import Dron
+    from src.control.centro_control import SistemaCentroControl
 
 
 class SimuladorVuelo:
@@ -22,8 +23,13 @@ class SimuladorVuelo:
     - Disparar transiciones de estado al arribar a destino o a la base central.
     """
 
-    def __init__(self, calculador: ICalculadorGeodesico | None = None) -> None:
+    def __init__(
+        self,
+        calculador: ICalculadorGeodesico | None = None,
+        centro_control: Any | None = None
+    ) -> None:
         self.calculador: ICalculadorGeodesico = calculador if calculador is not None else CalculadorGeodesico()
+        self.centro_control = centro_control
 
     def avanzar_paso_tiempo(
         self,
@@ -48,12 +54,36 @@ class SimuladorVuelo:
                 "estado": "ESTACIONARIO",
                 "delta_km": 0.0,
                 "distancia_restante_km": 0.0,
+                "eta_restante_min": 0.0,
                 "bateria_actual": round(dron.telemetria.bateria, 2) if dron.telemetria else 100.0,
+                "coordenadas_actuales": dron.telemetria.coordenadas if dron.telemetria else (0.0, 0.0),
                 "ha_llegado": False
             }
 
         if dron.telemetria is None:
             raise TelemetriaNoAsignadaError(dron.id_dron)
+
+        # BLOQUEO CRÍTICO: Si la batería ya está en 0.0 o menos, la aeronave no puede desplazarse
+        if dron.telemetria.bateria <= 0.0:
+            if dron.en_mision or dron.retornando_a_base:
+                dron.actualizar_telemetria(
+                    bateria_o_telemetria=0.0,
+                    altitud=0.0,
+                    estado_motores="STANDBY"
+                )
+                dron.en_mision = False
+                dron.retornando_a_base = False
+                dron.disponible = False
+            return {
+                "id_dron": dron.id_dron,
+                "estado": "BATERIA_AGOTADA",
+                "delta_km": 0.0,
+                "distancia_restante_km": 0.0,
+                "eta_restante_min": 0.0,
+                "bateria_actual": 0.0,
+                "coordenadas_actuales": dron.telemetria.coordenadas,
+                "ha_llegado": False
+            }
 
         factor_clima_seguro = max(0.1, min(1.0, float(factor_clima)))
         velocidad_efectiva_kmh = dron.velocidad_promedio_kmh * factor_clima_seguro
@@ -65,7 +95,9 @@ class SimuladorVuelo:
                 "estado": "VELOCIDAD_CERO",
                 "delta_km": 0.0,
                 "distancia_restante_km": 0.0,
+                "eta_restante_min": 0.0,
                 "bateria_actual": round(dron.telemetria.bateria, 2),
+                "coordenadas_actuales": dron.telemetria.coordenadas,
                 "ha_llegado": False
             }
 
@@ -115,9 +147,55 @@ class SimuladorVuelo:
                 )
                 ha_llegado_etapa = False
 
-            # 4. Consumo de energía polimórfico y acumulación de distancia
+            # 4. Consumo de energía polimórfico y verificación de agotamiento
             consumo_etapa = dron.calcular_consumo_estimado(distancia_avanzada_etapa_km)
-            nueva_bateria = max(0.0, dron.telemetria.bateria - consumo_etapa)
+
+            # Caso de agotamiento energético durante la etapa
+            if dron.telemetria.bateria <= consumo_etapa:
+                # El dron avanza únicamente la distancia que su energía remanente le permite
+                if consumo_etapa > 0.0:
+                    fraccion_energia = dron.telemetria.bateria / consumo_etapa
+                    distancia_real_km = distancia_avanzada_etapa_km * fraccion_energia
+                else:
+                    distancia_real_km = 0.0
+
+                distancia_total_avanzada_km += distancia_real_km
+
+                # Coordenadas intermedias donde se agota la batería (0.0%)
+                if distancia_etapa_km > 0.0 and distancia_real_km > 0.0:
+                    fraccion_geodesica = distancia_real_km / distancia_etapa_km
+                    coordenadas_agotamiento = self.calculador.calcular_punto_intermedio(
+                        dron.telemetria.coordenadas, objetivo, fraccion_geodesica
+                    )
+                else:
+                    coordenadas_agotamiento = dron.telemetria.coordenadas
+
+                # Aterrizaje forzoso inmediato por batería 0.0
+                dron.actualizar_telemetria(
+                    bateria_o_telemetria=0.0,
+                    altitud=0.0,
+                    estado_motores="STANDBY",
+                    coordenadas=coordenadas_agotamiento
+                )
+                dron.en_mision = False
+                dron.retornando_a_base = False
+                dron.disponible = False
+                estado_operacion = "BATERIA_AGOTADA"
+                ha_llegado_final = False
+
+                if self.centro_control is not None:
+                    id_ped = getattr(dron, "ultimo_pedido_completado", None)
+                    id_ped_str = id_ped.id_pedido if id_ped else (dron.pedido_activo.id_pedido if dron.pedido_activo else "N/A")
+                    self.centro_control.generar_log(
+                        evento="ATERRIZAJE_EMERGENCIA_BATERIA",
+                        id_dron=dron.id_dron,
+                        id_pedido=id_ped_str,
+                        detalles=f"¡EMERGENCIA! Batería 0.0% alcanzada en vuelo. Aterrizaje forzoso en coordenadas {coordenadas_agotamiento}."
+                    )
+                break
+
+            # Consumo nominal si la batería es suficiente
+            nueva_bateria = dron.telemetria.bateria - consumo_etapa
             distancia_total_avanzada_km += distancia_avanzada_etapa_km
             tiempo_restante_seg -= tiempo_consumido_etapa_seg
 
@@ -137,11 +215,29 @@ class SimuladorVuelo:
                 if fase == "MISION":
                     dron.finalizar_mision_en_destino()
                     estado_operacion = "LLEGADA_A_DESTINO"
+                    if self.centro_control is not None:
+                        id_ped = getattr(dron, "ultimo_pedido_completado", None)
+                        id_ped_str = id_ped.id_pedido if id_ped else "N/A"
+                        self.centro_control.generar_log(
+                            evento="LLEGADA_A_DESTINO",
+                            id_dron=dron.id_dron,
+                            id_pedido=id_ped_str,
+                            detalles=f"Dron {dron.id_dron} llegó a destino {coordenadas_etapa}. Pedido {id_ped_str} COMPLETADO. Inicia retorno a base."
+                        )
                     # dron.retornando_a_base queda en True; si tiempo_restante_seg > 0, el bucle procesará el retorno
                 elif fase == "RETORNO":
                     dron.finalizar_retorno_en_base()
                     estado_operacion = "LLEGADA_A_BASE"
                     ha_llegado_final = True
+                    if self.centro_control is not None:
+                        id_ped = getattr(dron, "ultimo_pedido_completado", None)
+                        id_ped_str = id_ped.id_pedido if id_ped else "N/A"
+                        self.centro_control.generar_log(
+                            evento="LLEGADA_A_BASE",
+                            id_dron=dron.id_dron,
+                            id_pedido=id_ped_str,
+                            detalles=f"Dron {dron.id_dron} aterrizó con éxito en base central {coordenadas_etapa}. Motores en STANDBY. Batería remanente: {dron.telemetria.bateria:.1f}%. Dron disponible."
+                        )
                     break
                 else:
                     estado_operacion = "EN_DESTINO"
@@ -152,24 +248,21 @@ class SimuladorVuelo:
                 ha_llegado_final = False
                 break
 
-            # 7. Si la batería se agota por completo, detener operaciones
-            if nueva_bateria <= 0.0:
-                dron.actualizar_telemetria(altitud=0.0, estado_motores="STANDBY")
-                estado_operacion = "BATERIA_AGOTADA"
-                break
-
         # 8. Cálculo de distancia y ETA pendientes del objetivo final
-        if dron.en_mision and dron.pedido_activo is not None:
+        if estado_operacion == "BATERIA_AGOTADA":
+            distancia_pendiente_km = 0.0
+            eta_min = 0.0
+        elif dron.en_mision and dron.pedido_activo is not None:
             objetivo_final = dron.pedido_activo.coordenada_destino
         elif dron.retornando_a_base and dron.coordenadas_base is not None:
             objetivo_final = dron.coordenadas_base
         else:
             objetivo_final = None
 
-        if objetivo_final is not None and not ha_llegado_final:
+        if estado_operacion != "BATERIA_AGOTADA" and objetivo_final is not None and not ha_llegado_final:
             distancia_pendiente_km = dron.calcular_distancia_a_destino(objetivo_final)
             eta_min = self.calculador.calcular_tiempo_vuelo_min(distancia_pendiente_km, velocidad_efectiva_kmh)
-        else:
+        elif estado_operacion != "BATERIA_AGOTADA":
             distancia_pendiente_km = 0.0
             eta_min = 0.0
 

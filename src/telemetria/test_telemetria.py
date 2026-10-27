@@ -216,13 +216,11 @@ def ejecutar_pruebas():
     # --------------------------------------------------------------------------
     # 4. COLABORACION ENTRE CLASES (DRON + TELEMETRIA - SPRINT 1)
     # --------------------------------------------------------------------------
-    print("--- [4] COLABORACION ENTRE CLASES: TELEMETRIA ASIGNADA A DRON ---")
+    from src.flota.dron_entrega_ligera import DronEntregaLigera
     total_pruebas += 1
-
-    dron_flota = Dron(
+    dron_flota = DronEntregaLigera(
         id_dron="DRON-MED-001",
         modelo_aeronave="Matrice-300-RTK",
-        categoria="ENTREGA_LIGERA",
         velocidad_promedio_kmh=60.0
     )
     dron_flota.asignar_telemetria(t_vuelo)
