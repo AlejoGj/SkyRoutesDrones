@@ -4,6 +4,8 @@ from src.servicios.geocodificador import (
     IServicioGeocodificador,
     ServicioGeocodificadorLocal,
     ServicioGeocodificadorOSM,
+    ServicioGeocodificadorGoogle,
+    ServicioGeocodificadorArcGIS,
 )
 
 __all__ = [
@@ -11,4 +13,6 @@ __all__ = [
     "IServicioGeocodificador",
     "ServicioGeocodificadorLocal",
     "ServicioGeocodificadorOSM",
+    "ServicioGeocodificadorGoogle",
+    "ServicioGeocodificadorArcGIS",
 ]

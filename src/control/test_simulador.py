@@ -4,10 +4,14 @@ from src.flota.dron import Dron
 from src.pedidos.pedido import Pedido
 from src.usuarios.usuario import Usuario
 from src.telemetria.telemetria import TelemetriaDrone
+from src.control.centro_control import SistemaCentroControl
 from src.control.simulador import SimuladorVuelo
 from src.control.reloj import RelojSimulacion
 from src.servicios.clima import ServicioClimaAburra
 from src.geodesia.calculador import CalculadorGeodesico
+
+
+from src.excepciones.errores import ActualizarEstadoDronError
 
 
 class DronMock(Dron):
@@ -27,7 +31,7 @@ class TestSimuladorVuelo(unittest.TestCase):
         self.calculador = CalculadorGeodesico()
         self.simulador = SimuladorVuelo(calculador=self.calculador)
 
-        self.coord_base = (6.2089, -75.5684)  # El Poblado
+        self.coord_base = SistemaCentroControl.COORDENADAS_BASE  # Olaya Herrera (6.219603, -75.586792)
         self.coord_destino = (6.2442, -75.5812)  # Medellín Centro
 
         self.dron = DronMock(
@@ -126,6 +130,107 @@ class TestSimuladorVuelo(unittest.TestCase):
         # Verificación del odómetro (ida + vuelta completa)
         distancia_ida = self.calculador.calcular_haversine(self.coord_base, self.coord_destino)
         self.assertAlmostEqual(self.dron.kilometraje_total_km, distancia_ida * 2, delta=0.1)
+
+    def test_bloqueo_despegue_bateria_cero(self):
+        """No permite despegar si el dron tiene batería 0.0%."""
+        self.telemetria.actualizar_trama(bateria=0.0)
+        with self.assertRaises(ActualizarEstadoDronError) as ctx:
+            self.dron.ejecutar_mision(self.pedido)
+        self.assertIn("agotada", str(ctx.exception).lower())
+
+    def test_bloqueo_despegue_bateria_insuficiente_para_retorno(self):
+        """
+        Bloquea el despegue si la batería alcanza para llegar al destino (ida),
+        pero no para completar la operación completa (ida + retorno a la base).
+        """
+        distancia_ida = self.calculador.calcular_haversine(self.coord_base, self.coord_destino)
+        consumo_ida = self.dron.calcular_consumo_estimado(distancia_ida)
+        # Batería suficiente para ida pero insuficiente para el retorno a base
+        self.telemetria.actualizar_trama(bateria=consumo_ida + 0.5)
+        with self.assertRaises(ActualizarEstadoDronError) as ctx:
+            self.dron.ejecutar_mision(self.pedido)
+        self.assertIn("batería insuficiente", str(ctx.exception).lower())
+        self.assertIn("retorno", str(ctx.exception).lower())
+
+    def test_simulacion_bloqueo_dron_bateria_cero_no_se_desplaza(self):
+        """Un dron con batería 0.0% no puede avanzar en la simulación temporal."""
+        self.telemetria.actualizar_trama(bateria=0.0)
+        self.dron.en_mision = True
+        coord_inicial = self.telemetria.coordenadas
+
+        reporte = self.simulador.avanzar_paso_tiempo(self.dron, delta_t=30.0)
+        self.assertEqual(reporte["estado"], "BATERIA_AGOTADA")
+        self.assertEqual(reporte["delta_km"], 0.0)
+        self.assertEqual(reporte["bateria_actual"], 0.0)
+        self.assertEqual(self.telemetria.coordenadas, coord_inicial)
+        self.assertFalse(self.dron.en_mision)
+        self.assertFalse(self.dron.disponible)
+
+    def test_simulacion_agotamiento_bateria_en_vuelo_aterrizaje_emergencia(self):
+        """
+        Si la batería se agota en pleno vuelo, el dron recorre únicamente la
+        distancia permitida por su energía remanente y realiza aterrizaje de emergencia.
+        """
+        # Le damos batería suficiente para autorizar despegue (ida + vuelta ~9.3%)
+        self.telemetria.actualizar_trama(bateria=15.0)
+        self.dron.ejecutar_mision(self.pedido)
+
+        # Forzamos batería remanente mínima simulando pérdida acelerada
+        self.telemetria.actualizar_trama(bateria=1.0)
+        reporte = self.simulador.avanzar_paso_tiempo(self.dron, delta_t=100.0)
+
+        self.assertEqual(reporte["estado"], "BATERIA_AGOTADA")
+        self.assertEqual(reporte["bateria_actual"], 0.0)
+        self.assertGreater(reporte["delta_km"], 0.0)
+        self.assertEqual(self.telemetria.altitud, 0.0)
+        self.assertFalse(self.dron.en_mision)
+        self.assertFalse(self.dron.disponible)
+
+    def test_recarga_bateria_en_base(self):
+        """Verifica que el dron pueda recargar batería cuando está en la base."""
+        self.telemetria.actualizar_trama(bateria=5.0)
+        self.dron.recargar_bateria(100.0)
+        self.assertEqual(self.telemetria.bateria, 100.0)
+        self.assertTrue(self.dron.disponible)
+
+        # No debe permitir recargar mientras está en misión
+        self.dron.en_mision = True
+        with self.assertRaises(ActualizarEstadoDronError):
+            self.dron.recargar_bateria(100.0)
+
+    def test_centro_control_no_asigna_dron_con_bateria_insuficiente(self):
+        """Verifica que el centro de control no asigne una aeronave si su batería no cubre ida y vuelta."""
+        centro = SistemaCentroControl()
+        self.dron.categoria = "ENTREGA_LIGERA"
+        # Batería insuficiente para ida y vuelta (~9.3% requerido)
+        self.telemetria.actualizar_trama(bateria=5.0)
+        centro.agregar_dron(self.dron)
+        centro.registrar_pedido(self.pedido)
+
+        asignado = centro.asignar_dron_a_pedido(self.pedido.id_pedido)
+        self.assertFalse(asignado)
+        self.assertIsNone(self.pedido.dron_asignado)
+
+    def test_simulador_emite_logs_llegada_destino_y_base(self):
+        """Verifica que el simulador registre logs de LLEGADA_A_DESTINO y LLEGADA_A_BASE en el centro de control."""
+        centro = SistemaCentroControl()
+        simulador_con_logs = SimuladorVuelo(calculador=self.calculador, centro_control=centro)
+
+        self.dron.ejecutar_mision(self.pedido)
+        centro.generar_log(
+            evento="DESPEGUE_MISION",
+            id_dron=self.dron.id_dron,
+            id_pedido=self.pedido.id_pedido,
+            detalles="Despegue de prueba"
+        )
+
+        # Un tick suficientemente largo para completar la misión completa (ida + retorno)
+        simulador_con_logs.avanzar_paso_tiempo(self.dron, delta_t=1000.0)
+
+        tipos_evento = [log.tipo_evento for log in centro.historial_logs]
+        self.assertIn("DESPEGUE_MISION", tipos_evento)
+        self.assertIn("LLEGADA_A_DESTINO", tipos_evento)
+        self.assertIn("LLEGADA_A_BASE", tipos_evento)
 
 
 class TestComponentesAuxiliaresSimulacion(unittest.TestCase):

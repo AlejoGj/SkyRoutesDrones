@@ -81,7 +81,13 @@ class TelemetriaDrone:
 
         
 
-    def actualizar_trama(self, bateria: float, altitud: float, estado_motores: str, coordenadas: tuple[float, float]) -> None:
+    def actualizar_trama(
+        self,
+        bateria: float = None,
+        altitud: float = None,
+        estado_motores: str = None,
+        coordenadas: tuple[float, float] = None
+    ) -> None:
         
         # Si un dato no se envía, conserva el que ya tiene la aeronave:
         nueva_bateria = bateria if bateria is not None else self.bateria

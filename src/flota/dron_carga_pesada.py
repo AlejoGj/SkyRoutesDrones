@@ -199,9 +199,18 @@ class DronCargaPesada(Dron):
         ficha_base = super().__str__().rstrip()
         ficha_sin_cierre = ficha_base.rsplit("\n", 1)[0]
         cierre = "=" * 56
+        tasa_str = "3.3% bat/km" if self._numero_rotores >= 8 else "3.1% bat/km"
         return (
             f"{ficha_sin_cierre}\n"
             f"  Volumen de Bodega  : {self._volumen_carga_m3:.1f} m³\n"
             f"  Tren de Propulsión : {self._numero_rotores} rotores | Remolque: {self._potencia_remolque_w:.0f} W\n"
+            f"  Eficiencia Consumo : {tasa_str}\n"
             f"{cierre}"
+        )
+
+    def __repr__(self) -> str:
+        return (
+            f"DronCargaPesada(id_dron='{self.id_dron}', modelo_aeronave='{self.modelo_aeronave}', "
+            f"volumen_carga_m3={self._volumen_carga_m3}, numero_rotores={self._numero_rotores}, "
+            f"disponible={self.disponible})"
         )

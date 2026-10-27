@@ -8,6 +8,8 @@ from src.flota.dron import Dron
 from src.control.log_operacion import LogOperacion
 from src.servicios.geocodificador import (
     IServicioGeocodificador,
+    ServicioGeocodificadorArcGIS,
+    ServicioGeocodificadorGoogle,
     ServicioGeocodificadorOSM,
 )
 from src.excepciones.errores import GeocodificacionError, CoordenadaInvalidaError
@@ -54,21 +56,44 @@ if DronCargaPesada is not None:
     FABRICA_DRONES['CARGA_PESADA'] = DronCargaPesada
 
 
+def registrar_subclase_en_fabrica(categoria: str, clase_dron: type[Dron]) -> None:
+    """
+    Permite registrar o extender dinámicamente el catálogo de la fábrica de drones (HU-12).
+    """
+    if not isinstance(categoria, str) or not categoria.strip():
+        raise ValueError("La categoría debe ser una cadena de texto no vacía.")
+    if not isinstance(clase_dron, type) or not issubclass(clase_dron, Dron):
+        raise TypeError("El parámetro debe ser una subclase válida de Dron.")
+    FABRICA_DRONES[categoria.strip()] = clase_dron
+
+
+def instanciar_dron_desde_fabrica(categoria: str, *args, **kwargs) -> Dron:
+    """
+    Instancia una subclase de dron a partir de la categoría registrada en FABRICA_DRONES (RF-08, Sprint 2).
+    """
+    if categoria not in FABRICA_DRONES:
+        raise ValueError(f"Categoría '{categoria}' no registrada en FABRICA_DRONES.")
+    clase_dron = FABRICA_DRONES[categoria]
+    return clase_dron(*args, **kwargs)
+
+
 
 class SistemaCentroControl:
+    LAT_BASE: float = 6.219603
+    LON_BASE: float = -75.586792
+    COORDENADAS_BASE: tuple[float, float] = (LAT_BASE, LON_BASE)
+
     def __init__(
         self,
-        lat_base: float = 6.2089,
-        lon_base: float = -75.5684,
         geocodificador: IServicioGeocodificador | None = None
     ) -> None:
         self.flota_drones: list[Dron] = []
         self.usuarios_registrados: list[Usuario] = []
         self.pedidos: list[Pedido] = []
         self.historial_logs: list[LogOperacion] = []
-        self.coordenadas_base: tuple[float, float] = (float(lat_base), float(lon_base))
+        self.coordenadas_base: tuple[float, float] = self.COORDENADAS_BASE
         self.geocodificador: IServicioGeocodificador = (
-            geocodificador if geocodificador is not None else ServicioGeocodificadorOSM()
+            geocodificador if geocodificador is not None else ServicioGeocodificadorArcGIS()
         )
 
     def agregar_dron(self, dron: Dron) -> Dron:
@@ -168,6 +193,31 @@ class SistemaCentroControl:
         for dron in drones_desocupados:
             categoria_dron = getattr(dron, "categoria", getattr(dron, "modelo_aeronave", None))
             if categoria_dron == pedido_encontrado.categoria_requerida:
+                # Validar autonomía completa para la operación (ida + retorno a base)
+                if dron.telemetria is not None:
+                    if dron.telemetria.bateria <= 0.0:
+                        print(f"El dron {dron.id_dron} tiene batería 0.0% (agotada). Descartado para la misión.")
+                        continue
+
+                    distancia_ida = dron.calcular_distancia_a_destino(pedido_encontrado.coordenada_destino)
+                    base = dron.coordenadas_base or self.coordenadas_base
+                    distancia_retorno = dron.calculador.calcular_haversine(pedido_encontrado.coordenada_destino, base)
+                    if distancia_retorno is None:
+                        distancia_retorno = distancia_ida
+                    distancia_total = distancia_ida + distancia_retorno
+                    consumo_requerido = dron.calcular_consumo_estimado(distancia_total)
+
+                    if dron.telemetria.bateria < consumo_requerido:
+                        print(
+                            f"El dron {dron.id_dron} tiene batería insuficiente ({dron.telemetria.bateria:.1f}% "
+                            f"vs {consumo_requerido:.1f}% requeridos para ida y vuelta). Buscando otra aeronave..."
+                        )
+                        continue
+
+                # Fijar base en dron si no la tenía
+                if dron.coordenadas_base is None:
+                    dron.coordenadas_base = self.coordenadas_base
+
                 pedido_encontrado.vincular_dron(dron)
                 pedido_encontrado.actualizar_estado('ASIGNADO')
 
@@ -184,7 +234,7 @@ class SistemaCentroControl:
                 print(f"El dron {dron.id_dron} ha sido asignado al pedido {pedido_encontrado.id_pedido} exitosamente.")
                 return True
 
-        print(f"No hay drones disponibles de la categoría '{pedido_encontrado.categoria_requerida}' en este momento.")
+        print(f"No hay drones disponibles de la categoría '{pedido_encontrado.categoria_requerida}' con batería suficiente en este momento.")
         return False
 
     def despachar_mision(self, id_pedido: str) -> bool:

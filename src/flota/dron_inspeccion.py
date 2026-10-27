@@ -36,33 +36,18 @@ class DronInspeccion(Dron):
 
     def __init__(
         self,
-        id_dron: str = None,
-        modelo_aeronave: str = None,
+        id_dron: str,
+        modelo_aeronave: str,
         zoom_optico_x: int = ZOOM_DEFAULT_X,
         rango_sensor_ultrasonico_m: float = ULTRASONICO_DEFAULT_M,
         velocidad_promedio_kmh: float = 50.0,
         kilometraje_total_km: float = 0.0,
         disponible: bool = True,
-        calculador=None,
-        **kwargs,
+        calculador=None
     ) -> None:
         """
-        Inicializa un dron de inspección técnica.
-        
-        Soporta tanto el orden tradicional (id, modelo, zoom, rango) como el orden
-        alternativo (zoom, rango, id, modelo) para máxima tolerancia en scripts del equipo.
+        Inicializa un dron de inspección técnica con atributos específicos validados.
         """
-        # Manejo flexible de orden posicional
-        if isinstance(id_dron, (int, float)) and isinstance(zoom_optico_x, (str, type(None))):
-            actual_zoom = id_dron
-            actual_rango = modelo_aeronave
-            actual_id = zoom_optico_x
-            actual_modelo = rango_sensor_ultrasonico_m
-            id_dron = actual_id
-            modelo_aeronave = actual_modelo
-            zoom_optico_x = actual_zoom
-            rango_sensor_ultrasonico_m = actual_rango
-
         super().__init__(
             id_dron=id_dron,
             modelo_aeronave=modelo_aeronave,
@@ -74,7 +59,7 @@ class DronInspeccion(Dron):
 
         self.categoria = self.CATEGORIA_ESPECIALIZADA
 
-        # PILAR: ENCAPSULAMIENTO PROTEGIDO
+
         # Asignación a través de setters para validaciones defensivas de dominio
         self.zoom_optico_x = zoom_optico_x
         self.rango_sensor_ultrasonico_m = rango_sensor_ultrasonico_m
@@ -150,42 +135,24 @@ class DronInspeccion(Dron):
         """
         return f"Diagnóstico: Zoom Óptico {self._zoom_optico_x}x, Sensor Ultrasónico {self._rango_sensor_ultrasonico_m:.1f}m [OPERATIVOS]"
 
-    # Alias para compatibilidad hacia atrás
-    inspeccionar_sistemas_esepcializados = inspeccionar_sistemas_especializados
+
 
     def predecir_viabilidad_mision(self, distancia_km: float) -> dict:
         """
         PILAR: POLIMORFISMO EN PREDICCIÓN ENERGÉTICA PRE-DESPEGUE (HU-10)
+        Reutiliza la lógica base de Dron y especializa el motivo de inspección.
         """
-        if isinstance(distancia_km, bool) or not isinstance(distancia_km, (int, float)):
-            raise TypeError(f"La distancia debe ser numérica. Recibido: {type(distancia_km).__name__}")
-        if distancia_km < 0:
-            raise ValueError(f"La distancia no puede ser negativa. Recibido: {distancia_km}")
-
-        consumo_estimado = self.calcular_consumo_estimado(distancia_km)
-        bateria_actual = self.telemetria.bateria if self.telemetria is not None else 0.0
-        tiene_telemetria = self.telemetria is not None
-
-        viable = tiene_telemetria and (bateria_actual >= consumo_estimado)
-        bateria_remanente = max(0.0, bateria_actual - consumo_estimado) if viable else 0.0
-
-        if not tiene_telemetria:
-            motivo = "Misión no viable: el dron no tiene telemetría asignada."
-        elif bateria_actual < consumo_estimado:
-            motivo = f"Misión no viable: batería insuficiente ({bateria_actual:.1f}% actual vs. {consumo_estimado:.1f}% requerido por inspección estacionaria)."
-        else:
-            motivo = f"Misión viable: autonomía de inspección suficiente con remanente proyectado de {bateria_remanente:.1f}%."
-
-        return {
-            "id_dron": self.id_dron,
-            "tipo_dron": self.__class__.__name__,
-            "distancia_km": round(float(distancia_km), 2),
-            "consumo_estimado_pct": round(consumo_estimado, 2),
-            "bateria_actual_pct": round(bateria_actual, 2),
-            "bateria_remanente_pct": round(bateria_remanente, 2),
-            "mision_viable": viable,
-            "diagnostico_autonomia": motivo,
-        }
+        reporte = super().predecir_viabilidad_mision(distancia_km)
+        if reporte["mision_viable"]:
+            reporte["diagnostico_autonomia"] = (
+                f"Misión viable: autonomía de inspección suficiente con remanente proyectado de {reporte['bateria_remanente_pct']:.1f}%."
+            )
+        elif self.telemetria is not None:
+            reporte["diagnostico_autonomia"] = (
+                f"Misión no viable: batería insuficiente ({reporte['bateria_actual_pct']:.1f}% actual vs. "
+                f"{reporte['consumo_estimado_pct']:.1f}% requerido por inspección estacionaria)."
+            )
+        return reporte
 
     # ==========================================================================
     # 5. REPRESENTACIÓN MULTILÍNEA Y FICHA TÉCNICA

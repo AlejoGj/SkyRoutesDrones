@@ -54,6 +54,7 @@ class Dron(ABC):
         self.retornando_a_base = False
         self.coordenadas_base = None
         self.pedido_activo: Pedido | None = None  # Referencia al Pedido actualmente en tránsito
+        self.ultimo_pedido_completado: Pedido | None = None  # Histórico del último pedido asignado/completado
         
         """ Colaboradores de la Entidad Dron """
         self.telemetria = None  # Inicialmente no hay telemetría asignada
@@ -179,42 +180,64 @@ class Dron(ABC):
             })
             return reporte_despegue
         """
-        if not self.disponible:
+        # Permitir despegue si el dron está disponible o si ya fue reservado/asignado para este pedido
+        esta_asignado_a_este_pedido = pedido is not None and getattr(pedido, 'dron_asignado', None) is self
+        if not self.disponible and not esta_asignado_a_este_pedido:
             raise ActualizarEstadoDronError(self.id_dron, "El dron no está disponible para despegar.")
 
         if self.telemetria is None:
             raise TelemetriaNoAsignadaError(self.id_dron)
 
-        # 1. Validación de autonomía y consumo estimado antes de despegar
-        distancia_estimada_km = self.calcular_distancia_a_destino(pedido.coordenada_destino)
-        consumo_estimado = self.calcular_consumo_estimado(distancia_estimada_km)
-        if self.telemetria.bateria < consumo_estimado:
+        # 1. Validación estricta de batería nula antes de iniciar cualquier operación
+        if self.telemetria.bateria <= 0.0:
             raise ActualizarEstadoDronError(
                 self.id_dron,
-                f"Batería insuficiente ({self.telemetria.bateria:.1f}%) para la misión. Se requiere mínimo {consumo_estimado:.1f}%."
+                f"No se puede iniciar la misión: el dron tiene batería {self.telemetria.bateria:.1f}% (agotada)."
             )
 
-        # 2. Mutación de banderas operacionales (inicia vuelo activo)
+        # 2. Validación de autonomía y consumo estimado para la operación completa (ida + retorno a base)
+        distancia_ida_km = self.calcular_distancia_a_destino(pedido.coordenada_destino)
+        base_retorno = self.coordenadas_base if self.coordenadas_base is not None else (6.219603, -75.586792)
+        distancia_retorno_km = self.calculador.calcular_haversine(pedido.coordenada_destino, base_retorno)
+        if distancia_retorno_km is None:
+            distancia_retorno_km = distancia_ida_km
+
+        distancia_total_operacion_km = distancia_ida_km + distancia_retorno_km
+        consumo_total_operacion = self.calcular_consumo_estimado(distancia_total_operacion_km)
+
+        if self.telemetria.bateria < consumo_total_operacion:
+            raise ActualizarEstadoDronError(
+                self.id_dron,
+                f"Batería insuficiente ({self.telemetria.bateria:.1f}%) para completar la operación. "
+                f"Se requiere mínimo {consumo_total_operacion:.1f}% (ida: {distancia_ida_km:.2f} km + retorno: {distancia_retorno_km:.2f} km = {distancia_total_operacion_km:.2f} km)."
+            )
+
+        if self.coordenadas_base is None:
+            self.coordenadas_base = base_retorno
+
+        # 3. Mutación de banderas operacionales (inicia vuelo activo)
         self.disponible = False
         self.en_mision = True
         self.retornando_a_base = False
         self.pedido_activo = pedido
+        self.ultimo_pedido_completado = pedido
 
-        # 3. Transición a vuelo en telemetría (despegue sin teletransportación de coordenadas)
+        # 4. Transición a vuelo en telemetría (despegue sin teletransportación de coordenadas)
         self.actualizar_telemetria(
             altitud=30.0,
             estado_motores="EN_VUELO"
         )
 
-        # 4. Actualización del pedido a estado activo
+        # 5. Actualización del pedido a estado activo
         pedido.actualizar_estado("EN_TRANSITO")
 
         return {
             "id_dron": self.id_dron,
             "id_pedido": pedido.id_pedido,
             "estado_mision": "DESPEGUE_EXITOSO",
-            "distancia_objetivo_km": round(distancia_estimada_km, 2),
-            "consumo_estimado": round(consumo_estimado, 2),
+            "distancia_objetivo_km": round(distancia_ida_km, 2),
+            "distancia_total_operacion_km": round(distancia_total_operacion_km, 2),
+            "consumo_estimado": round(consumo_total_operacion, 2),
             "coordenadas_origen": self.telemetria.coordenadas,
             "coordenadas_destino": pedido.coordenada_destino
         }
@@ -228,6 +251,42 @@ class Dron(ABC):
     @abstractmethod
     def inspeccionar_sistemas_especializados(self) -> str:
         ...
+
+    def predecir_viabilidad_mision(self, distancia_km: float) -> dict:
+        """
+        PILAR: POLIMORFISMO EN PREDICCIÓN ENERGÉTICA PRE-DESPEGUE (HU-10)
+        Evalúa si la aeronave cuenta con autonomía suficiente para cubrir la distancia proyectada.
+        Delega el cálculo a la fórmula polimórfica 'self.calcular_consumo_estimado(distancia_km)'.
+        """
+        if isinstance(distancia_km, bool) or not isinstance(distancia_km, (int, float)):
+            raise TypeError(f"La distancia debe ser numérica. Recibido: {type(distancia_km).__name__}")
+        if distancia_km < 0:
+            raise ValueError(f"La distancia no puede ser negativa. Recibido: {distancia_km}")
+
+        consumo_estimado = self.calcular_consumo_estimado(distancia_km)
+        bateria_actual = self.telemetria.bateria if self.telemetria is not None else 0.0
+        tiene_telemetria = self.telemetria is not None
+
+        viable = tiene_telemetria and (bateria_actual >= consumo_estimado)
+        bateria_remanente = max(0.0, bateria_actual - consumo_estimado) if viable else 0.0
+
+        if not tiene_telemetria:
+            motivo = "Misión no viable: el dron no tiene telemetría asignada."
+        elif bateria_actual < consumo_estimado:
+            motivo = f"Misión no viable: batería insuficiente ({bateria_actual:.1f}% actual vs. {consumo_estimado:.1f}% requerido)."
+        else:
+            motivo = f"Misión viable: autonomía suficiente con remanente proyectado de {bateria_remanente:.1f}%."
+
+        return {
+            "id_dron": self.id_dron,
+            "tipo_dron": self.__class__.__name__,
+            "distancia_km": round(float(distancia_km), 2),
+            "consumo_estimado_pct": round(consumo_estimado, 2),
+            "bateria_actual_pct": round(bateria_actual, 2),
+            "bateria_remanente_pct": round(bateria_remanente, 2),
+            "mision_viable": viable,
+            "diagnostico_autonomia": motivo,
+        }
 
 
     def actualizar_estado_disponibilidad(self, disponible: bool) -> None:
@@ -322,6 +381,31 @@ class Dron(ABC):
         """
         return tuple(self._historial_telemetria)
 
+    def recargar_bateria(self, porcentaje: float = 100.0) -> None:
+        """
+        Recarga la batería de la aeronave cuando se encuentra en la base central o estacionaria.
+        No permite recargar si el dron se encuentra en vuelo o ejecutando una misión.
+        """
+        if self.en_mision or self.retornando_a_base:
+            raise ActualizarEstadoDronError(
+                self.id_dron,
+                "No se puede recargar la batería mientras el dron está en vuelo o en misión activa."
+            )
+        if self.telemetria is None:
+            raise TelemetriaNoAsignadaError(self.id_dron)
+
+        if not isinstance(porcentaje, (int, float)) or isinstance(porcentaje, bool):
+            raise TypeError("El porcentaje de recarga debe ser un valor numérico.")
+
+        porcentaje_valido = max(0.0, min(100.0, float(porcentaje)))
+        self.actualizar_telemetria(
+            bateria_o_telemetria=porcentaje_valido,
+            altitud=0.0,
+            estado_motores="STANDBY"
+        )
+        if porcentaje_valido >= 20.0:
+            self.disponible = True
+
 
     def calcular_distancia_a_destino(self, destino: tuple) -> float: #type: ignore
         # Calcula la distancia entre el dron y un destino.
@@ -345,7 +429,7 @@ class Dron(ABC):
     def iniciar_retorno_base(self, coordenadas_base: tuple = None) -> None:
         base = coordenadas_base if coordenadas_base is not None else self.coordenadas_base
         if base is None:
-            base = (6.2089, -75.5684)  # Base predeterminada SkyRoute (Olaya Herrera)
+            base = (6.219603, -75.586792)  # Base predeterminada SkyRoute (Olaya Herrera)
         if not isinstance(base, tuple) or len(base) != 2:
             raise DestinoInvalidoError(self.id_dron, base)
             
@@ -400,6 +484,7 @@ class Dron(ABC):
         
         self.en_mision = False
         self.pedido_activo = None
+        self.ultimo_pedido_completado = pedido_completado
         self.iniciar_retorno_base()
 
         return {
@@ -408,4 +493,4 @@ class Dron(ABC):
             "estado_mision": "COMPLETADA_EN_DESTINO",
             "coordenadas_llegada": self.telemetria.coordenadas if self.telemetria else None
         }
-
+        
