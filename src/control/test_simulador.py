@@ -258,6 +258,101 @@ class TestComponentesAuxiliaresSimulacion(unittest.TestCase):
         self.assertIsInstance(clima["factor_velocidad"], (int, float))
         self.assertGreaterEqual(clima["factor_velocidad"], 0.1)
 
+    def test_refrescar_datos_flota_estacionario_y_compatibilidad_int(self):
+        """Verifica que refrescar_datos_flota devuelva ResumenRefrescoFlota compatible con int y registre log."""
+        centro = SistemaCentroControl()
+        dron = DronMock(
+            id_dron="DRON-REF-01",
+            modelo_aeronave="AeroCourier",
+            velocidad_promedio_kmh=60.0,
+            kilometraje_total_km=0.0,
+            disponible=True,
+        )
+        dron.asignar_telemetria(TelemetriaDrone(
+            id_dron="DRON-REF-01",
+            bateria=100.0,
+            altitud=0.0,
+            estado_motores="STANDBY",
+            coordenadas=centro.coordenadas_base,
+        ))
+        centro.agregar_dron(dron)
+
+        resumen = centro.refrescar_datos_flota(delta_t=10.0)
+        self.assertEqual(int(resumen), 1)
+        self.assertEqual(resumen["drones_activos"], 0)
+        self.assertEqual(len(resumen["reportes_aeronaves"]), 0)
+        self.assertIn("delta_segundos", resumen)
+        self.assertIn("clima", resumen)
+
+        tipos_log = [l.tipo_evento for l in centro.historial_logs]
+        self.assertIn("REFRESCO_TELEMETRIA", tipos_log)
+
+    def test_refrescar_datos_flota_avance_concurrente_multidron(self):
+        """Verifica que refrescar_datos_flota avance simultáneamente múltiples drones activos en un solo pulso."""
+        centro = SistemaCentroControl()
+        calculador = CalculadorGeodesico()
+        simulador = SimuladorVuelo(calculador=calculador, centro_control=centro)
+        centro.simulador = simulador
+
+        # Dron 1
+        dron1 = DronMock(
+            id_dron="DRON-CONC-01",
+            modelo_aeronave="AeroCourier-V3",
+            velocidad_promedio_kmh=60.0,
+            kilometraje_total_km=0.0,
+            disponible=True,
+            calculador=calculador,
+        )
+        dron1.asignar_telemetria(TelemetriaDrone(
+            id_dron="DRON-CONC-01",
+            bateria=100.0,
+            altitud=0.0,
+            estado_motores="STANDBY",
+            coordenadas=centro.coordenadas_base,
+        ))
+
+        # Dron 2
+        dron2 = DronMock(
+            id_dron="DRON-CONC-02",
+            modelo_aeronave="HeavyLifter-OctoX",
+            velocidad_promedio_kmh=50.0,
+            kilometraje_total_km=0.0,
+            disponible=True,
+            calculador=calculador,
+        )
+        dron2.asignar_telemetria(TelemetriaDrone(
+            id_dron="DRON-CONC-02",
+            bateria=100.0,
+            altitud=0.0,
+            estado_motores="STANDBY",
+            coordenadas=centro.coordenadas_base,
+        ))
+
+        centro.agregar_dron(dron1)
+        centro.agregar_dron(dron2)
+
+        usuario = Usuario("USR-TEST", "Alejo", "CLIENTE")
+        pedido1 = Pedido("PED-CONC-01", usuario, "ENTREGA_LIGERA", (6.2500, -75.5700), 1.0)
+        pedido2 = Pedido("PED-CONC-02", usuario, "CARGA_PESADA", (6.2000, -75.6000), 3.0)
+
+        dron1.ejecutar_mision(pedido1)
+        dron2.ejecutar_mision(pedido2)
+
+        self.assertTrue(dron1.en_mision)
+        self.assertTrue(dron2.en_mision)
+
+        # Pulso conjunto de 30 segundos
+        resumen = centro.refrescar_datos_flota(delta_t=30.0, factor_clima=1.0)
+
+        self.assertEqual(resumen["drones_activos"], 2)
+        self.assertEqual(len(resumen["reportes_aeronaves"]), 2)
+
+        # Ambos drones deben haber avanzado cinemática y consumido batería
+        self.assertLess(dron1.telemetria.bateria, 100.0)
+        self.assertLess(dron2.telemetria.bateria, 100.0)
+        self.assertNotEqual(dron1.telemetria.coordenadas, centro.coordenadas_base)
+        self.assertNotEqual(dron2.telemetria.coordenadas, centro.coordenadas_base)
+
 
 if __name__ == "__main__":
     unittest.main()

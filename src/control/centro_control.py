@@ -2,10 +2,14 @@
 # Responsable: Valery Arboleda Ardila (Sprint 2 - HU-12)
 
 from datetime import datetime
+from typing import Any
 from src.usuarios.usuario import Usuario
 from src.pedidos.pedido import Pedido
 from src.flota.dron import Dron
 from src.control.log_operacion import LogOperacion
+from src.control.reloj import RelojSimulacion
+from src.control.simulador import SimuladorVuelo
+from src.servicios.clima import ServicioClimaAburra
 from src.servicios.geocodificador import (
     IServicioGeocodificador,
     ServicioGeocodificadorArcGIS,
@@ -78,6 +82,26 @@ def instanciar_dron_desde_fabrica(categoria: str, *args, **kwargs) -> Dron:
 
 
 
+class ResumenRefrescoFlota(dict):
+    """
+    Estructura de datos para el resultado de refrescar_datos_flota().
+    Hereda de dict para proporcionar acceso completo a:
+    - 'delta_segundos': float (tiempo transcurrido en el pulso)
+    - 'clima': dict (condiciones meteorológicas vigentes y factor de velocidad)
+    - 'reportes_aeronaves': list[dict] (reportes cinemáticos de drones procesados)
+    - 'total_aeronaves': int (total de aeronaves registradas en la flota)
+    - 'drones_activos': int (aeronaves con avance en vuelo o retorno)
+
+    Implementa __int__ y __index__ para garantizar compatibilidad retroactiva
+    con cualquier código o test que espere un entero con el número de aeronaves.
+    """
+    def __int__(self) -> int:
+        return int(self.get("total_aeronaves", len(self.get("reportes_aeronaves", []))))
+
+    def __index__(self) -> int:
+        return self.__int__()
+
+
 class SistemaCentroControl:
     LAT_BASE: float = 6.219603
     LON_BASE: float = -75.586792
@@ -85,7 +109,10 @@ class SistemaCentroControl:
 
     def __init__(
         self,
-        geocodificador: IServicioGeocodificador | None = None
+        geocodificador: IServicioGeocodificador | None = None,
+        reloj: RelojSimulacion | None = None,
+        servicio_clima: ServicioClimaAburra | None = None,
+        simulador: SimuladorVuelo | None = None,
     ) -> None:
         self.flota_drones: list[Dron] = []
         self.usuarios_registrados: list[Usuario] = []
@@ -95,6 +122,52 @@ class SistemaCentroControl:
         self.geocodificador: IServicioGeocodificador = (
             geocodificador if geocodificador is not None else ServicioGeocodificadorArcGIS()
         )
+        self.reloj: RelojSimulacion = reloj if reloj is not None else RelojSimulacion()
+        self.servicio_clima: ServicioClimaAburra = (
+            servicio_clima if servicio_clima is not None else ServicioClimaAburra()
+        )
+        self.simulador: SimuladorVuelo = (
+            simulador if simulador is not None else SimuladorVuelo(centro_control=self)
+        )
+        self._cache_clima: dict[str, Any] | None = None
+        self._nodo_cache_clima: str = ""
+        self._ts_cache_clima: float = 0.0
+
+    def _obtener_clima_con_cache(
+        self,
+        nombre_nodo: str = "Medellin_Centro",
+        ttl_segundos: float = 60.0,
+    ) -> dict[str, Any]:
+        """
+        Retorna las condiciones climáticas del nodo solicitado utilizando un caché
+        en memoria para evitar latencias de red y consumo excesivo de la API pública.
+        """
+        import time
+        ahora = time.time()
+        if (
+            self._cache_clima is not None
+            and self._nodo_cache_clima == nombre_nodo
+            and (ahora - self._ts_cache_clima) < ttl_segundos
+        ):
+            return self._cache_clima
+
+        try:
+            clima = self.servicio_clima.obtener_condiciones(nombre_nodo)
+        except Exception:
+            clima = {
+                "nodo": nombre_nodo,
+                "temperatura_c": 22.0,
+                "lluvia_mm": 0.0,
+                "viento_kmh": 12.0,
+                "factor_velocidad": 1.0,
+                "vuelo_seguro": True,
+                "fallback": True,
+            }
+
+        self._cache_clima = clima
+        self._nodo_cache_clima = nombre_nodo
+        self._ts_cache_clima = ahora
+        return clima
 
     def agregar_dron(self, dron: Dron) -> Dron:
         if not isinstance(dron, Dron):
@@ -373,14 +446,85 @@ class SistemaCentroControl:
         self.historial_logs.append(nuevo_log)
         return nuevo_log
 
-    def refrescar_datos_flota(self) -> int:
-        drones_actualizados = len(self.flota_drones)
-        self.generar_log(
-            evento="REFRESCO_TELEMETRIA",
-            detalles=f"Telemetria y estado de {drones_actualizados} aeronave(s) de la flota actualizados bajo demanda."
+    def refrescar_datos_flota(
+        self,
+        nombre_nodo: str = "Medellin_Centro",
+        delta_t: float | None = None,
+        factor_clima: float | None = None,
+    ) -> ResumenRefrescoFlota:
+        """
+        Hook ejecutado al pulsar el botón de actualización o en el ciclo de simulación temporal.
+        Calcula el delta de tiempo transcurrido (mediante RelojSimulacion o provisto),
+        obtiene el factor climático del Valle de Aburrá (vía ServicioClimaAburra con caché),
+        y avanza la cinemática, posición y descarga polimórfica de batería de toda la flota
+        activa (en misión o retornando a base) mediante el SimuladorVuelo desacoplado.
+        """
+        if delta_t is None:
+            delta_segundos = self.reloj.obtener_delta()
+        else:
+            delta_segundos = max(0.0, float(delta_t))
+
+        if factor_clima is not None:
+            clima = {
+                "nodo": nombre_nodo,
+                "temperatura_c": 22.0,
+                "lluvia_mm": 0.0,
+                "viento_kmh": 12.0,
+                "factor_velocidad": float(factor_clima),
+                "vuelo_seguro": True,
+            }
+            factor_velocidad = float(factor_clima)
+        else:
+            clima = self._obtener_clima_con_cache(nombre_nodo)
+            factor_velocidad = float(clima.get("factor_velocidad", 1.0))
+
+        reportes: list[dict[str, Any]] = []
+        drones_activos = 0
+
+        for dron in self.flota_drones:
+            esta_activo = bool(
+                (dron.en_mision and getattr(dron, "pedido_activo", None) is not None)
+                or dron.retornando_a_base
+            )
+            if not esta_activo:
+                continue
+
+            drones_activos += 1
+            objetivo = None
+            if dron.retornando_a_base:
+                objetivo = dron.coordenadas_base or self.coordenadas_base
+            elif dron.en_mision:
+                if dron.pedido_activo is not None:
+                    objetivo = dron.pedido_activo.coordenada_destino
+                else:
+                    for ped in self.pedidos:
+                        if ped.dron_asignado and ped.dron_asignado.id_dron == dron.id_dron:
+                            objetivo = ped.coordenada_destino
+                            break
+
+            reporte_dron = self.simulador.avanzar_paso_tiempo(
+                dron=dron,
+                delta_t=delta_segundos,
+                factor_clima=factor_velocidad,
+                coordenada_objetivo=objetivo,
+            )
+            reportes.append(reporte_dron)
+
+        total_flota = len(self.flota_drones)
+        texto_detalles = (
+            f"Paso de tiempo: {delta_segundos:.2f}s | Clima {clima.get('nodo', nombre_nodo)}: "
+            f"{clima.get('temperatura_c', 22.0)}°C, Viento: {clima.get('viento_kmh', 0.0)}km/h | "
+            f"Flota: {total_flota} aeronave(s) (Activas en vuelo: {drones_activos})"
         )
-        print(f"Telemetría y estado de {drones_actualizados} aeronave(s) en la flota actualizados con éxito.")
-        return drones_actualizados
+        self.generar_log(evento="REFRESCO_TELEMETRIA", detalles=texto_detalles)
+
+        return ResumenRefrescoFlota({
+            "delta_segundos": delta_segundos,
+            "clima": clima,
+            "reportes_aeronaves": reportes,
+            "total_aeronaves": total_flota,
+            "drones_activos": drones_activos,
+        })
 
     def __str__(self) -> str:
         linea = "=" * 55
