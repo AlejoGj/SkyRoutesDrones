@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import math
 import time
 from datetime import datetime
 from typing import Any
@@ -719,7 +720,10 @@ class ControladorSkyRoute:
         return estado
 
     def previsualizar_geocodificacion(self, direccion: str) -> dict[str, Any]:
-        detalle = self.geocodificador.obtener_detalle_direccion(direccion)
+        dir_limpia = str(direccion or "").strip()
+        if not dir_limpia or dir_limpia.lower() == "none":
+            raise GeocodificacionError("", "La dirección a geocodificar debe ser una cadena no vacía.")
+        detalle = self.geocodificador.obtener_detalle_direccion(dir_limpia)
         coords = tuple(detalle["coordenadas"])
         base = self.centro.coordenadas_base
         dist_ida = self.calculador.calcular_haversine(base, coords)
@@ -737,9 +741,12 @@ class ControladorSkyRoute:
         }
 
     def comparar_viabilidad_polimorfica(self, distancia_km: float) -> dict[str, Any]:
-        distancia = float(distancia_km)
-        if distancia <= 0.0:
-            raise ValueError("La distancia de evaluación debe ser mayor a 0.0 km.")
+        try:
+            distancia = float(distancia_km)
+            if not math.isfinite(distancia) or distancia <= 0.0:
+                raise ValueError("La distancia de evaluación debe ser un número finito estrictamente mayor a 0.0 km.")
+        except (TypeError, ValueError) as err:
+            raise ValueError(f"Distancia de evaluación no válida: {err}")
 
         comparativa = []
         for dron in self.centro.flota_drones:
@@ -798,11 +805,15 @@ class ControladorSkyRoute:
         return estado
 
     def crear_dron_desde_fabrica(self, datos: dict[str, Any]) -> dict[str, Any]:
+        id_dron = str(datos.get("id_dron", "")).strip()
         categoria = str(datos.get("categoria", "")).strip().upper()
         if categoria not in FABRICA_DRONES:
-            raise CategoriaDronInvalidoError(categoria)
+            raise CategoriaDronInvalidoError(
+                id_dron=id_dron or "NUEVO_DRON",
+                categoria=categoria,
+                categorias_permitidas=tuple(FABRICA_DRONES.keys()),
+            )
 
-        id_dron = str(datos.get("id_dron", "")).strip()
         if not id_dron:
             prefijo = categoria[:4]
             id_dron = f"DRON-{prefijo}-{len(self.centro.flota_drones) + 1:02d}"
@@ -810,9 +821,20 @@ class ControladorSkyRoute:
         esquema = self.ESQUEMA_FABRICA.get(categoria, {})
         modelo = str(datos.get("modelo_aeronave", "")).strip() or esquema.get("modelo_sugerido", "SkyRoute-Custom")
         vel_raw = datos.get("velocidad_promedio_kmh")
-        velocidad = float(vel_raw) if vel_raw not in (None, "") else float(esquema.get("velocidad_default", 55.0))
+        try:
+            velocidad = float(vel_raw) if vel_raw not in (None, "") else float(esquema.get("velocidad_default", 55.0))
+            if not math.isfinite(velocidad):
+                velocidad = float(esquema.get("velocidad_default", 55.0))
+        except (ValueError, TypeError):
+            velocidad = float(esquema.get("velocidad_default", 55.0))
+
         bat_raw = datos.get("bateria_inicial")
-        bateria_inicial = float(bat_raw) if bat_raw not in (None, "") else 100.0
+        try:
+            bateria_inicial = float(bat_raw) if bat_raw not in (None, "") else 100.0
+            if not math.isfinite(bateria_inicial):
+                bateria_inicial = 100.0
+        except (ValueError, TypeError):
+            bateria_inicial = 100.0
 
         kwargs_especificos: dict[str, Any] = {}
         parametros_entrada = datos.get("parametros", {}) or {}
@@ -870,7 +892,13 @@ class ControladorSkyRoute:
     def recargar_bateria_dron(self, id_dron: str, porcentaje: float = 100.0) -> dict[str, Any]:
         dron = self._buscar_dron(id_dron)
         bat_previa = dron.telemetria.bateria if dron.telemetria else 0.0
-        dron.recargar_bateria(float(porcentaje))
+        try:
+            pct_val = float(porcentaje) if porcentaje not in (None, "") else 100.0
+            if not math.isfinite(pct_val):
+                pct_val = 100.0
+        except (ValueError, TypeError):
+            pct_val = 100.0
+        dron.recargar_bateria(pct_val)
         # Si quedó en coordenadas de aterrizaje forzoso, reposicionar en plataforma de base al recargar al >= 20%
         if dron.disponible and dron.telemetria and dron.telemetria.coordenadas != self.centro.coordenadas_base:
             dron.telemetria.coordenadas = self.centro.coordenadas_base
@@ -946,7 +974,12 @@ class ControladorSkyRoute:
 
         categoria = str(datos.get("categoria_requerida", "ENTREGA_LIGERA")).strip().upper()
         peso_raw = datos.get("peso_carga_kg", 1.5)
-        peso = float(peso_raw) if peso_raw not in ("", None) else 0.0
+        try:
+            peso = float(peso_raw) if peso_raw not in ("", None) else 0.0
+            if not math.isfinite(peso):
+                raise ValueError("El peso de la carga debe ser un número finito.")
+        except (ValueError, TypeError) as err:
+            raise ValueError(f"Peso de la carga no válido: {err}")
         direccion = str(datos.get("direccion_destino", "")).strip() or None
         id_usuario = str(datos.get("id_usuario") or self._usuario_activo_id)
         usuario = self._buscar_usuario(id_usuario)
@@ -988,10 +1021,10 @@ class ControladorSkyRoute:
         estado["pedido_creado_id"] = nuevo_pedido.id_pedido
         return estado
 
-    def asignar_dron_pedido(self, id_pedido: str) -> dict[str, Any]:
+    def asignar_dron_pedido(self, id_pedido: str, id_dron: str | None = None) -> dict[str, Any]:
         pedido = self._buscar_pedido(id_pedido)
         diagnostico_previo = self._diagnosticar_candidatos_pedido(pedido)
-        asignado = self.centro.asignar_dron_a_pedido(pedido.id_pedido)
+        asignado = self.centro.asignar_dron_a_pedido(pedido.id_pedido, id_dron=id_dron)
 
         if not asignado:
             candidatos = diagnostico_previo["candidatos"]
@@ -1223,13 +1256,25 @@ class ControladorSkyRoute:
         """
         delta_reloj = self.reloj.obtener_delta()
         if usar_reloj_real:
-            factor_escala = max(0.1, float(escala_tiempo))
+            try:
+                factor_escala = float(escala_tiempo)
+                if not math.isfinite(factor_escala):
+                    factor_escala = 1.0
+            except (ValueError, TypeError):
+                factor_escala = 1.0
+            factor_escala = max(0.1, min(100.0, factor_escala))
             if factor_escala == 1.0:
                 paso_seg = max(0.5, min(120.0, delta_reloj))
             else:
                 paso_seg = max(1.0, min(120.0, delta_reloj * factor_escala))
         else:
-            paso_seg = max(1.0, float(delta_t))
+            try:
+                dt_val = float(delta_t)
+                if not math.isfinite(dt_val):
+                    dt_val = 30.0
+            except (ValueError, TypeError):
+                dt_val = 30.0
+            paso_seg = max(0.5, min(3600.0, dt_val))
 
         factor_clima = float(self._clima_actual.get("factor_velocidad", 1.0))
 

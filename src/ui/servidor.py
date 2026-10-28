@@ -56,8 +56,16 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(cuerpo)))
         self.send_header("Cache-Control", "no-store")
+        self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(cuerpo)
+
+    def do_OPTIONS(self) -> None:
+        self.send_response(HTTPStatus.NO_CONTENT)
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.end_headers()
 
     def _servir_archivo_estatico(self, nombre_relativo: str) -> None:
         ruta_limpia = nombre_relativo.lstrip("/") or "index.html"
@@ -84,13 +92,20 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
         self.wfile.write(contenido)
 
     def _leer_cuerpo_json(self) -> dict[str, Any]:
-        longitud = int(self.headers.get("Content-Length", "0"))
+        longitud_hdr = self.headers.get("Content-Length", "0")
+        try:
+            longitud = int(longitud_hdr)
+        except (ValueError, TypeError):
+            raise ValueError(f"Cabecera Content-Length inválida: '{longitud_hdr}'.")
         if longitud <= 0:
             return {}
         crudo = self.rfile.read(longitud).decode("utf-8")
         if not crudo.strip():
             return {}
-        return json.loads(crudo)
+        cuerpo = json.loads(crudo)
+        if not isinstance(cuerpo, dict):
+            raise ValueError("El cuerpo de la petición debe ser un objeto JSON (diccionario clave-valor).")
+        return cuerpo
 
     # ==========================================================================
     # DESPACHO DE PETICIONES GET Y POST
@@ -137,12 +152,12 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
 
         try:
             datos = self._leer_cuerpo_json()
-        except json.JSONDecodeError:
+        except (json.JSONDecodeError, ValueError) as exc:
             self._enviar_json(
                 {
                     "ok": False,
-                    "error_tipo": "FormatoJSONError",
-                    "mensaje": "El cuerpo de la petición no es un objeto JSON válido.",
+                    "error_tipo": type(exc).__name__,
+                    "mensaje": str(exc) if isinstance(exc, ValueError) else "El cuerpo de la petición no es un objeto JSON válido.",
                     "regla_negocio": "Protocolo de Comunicación HTTP",
                 },
                 HTTPStatus.BAD_REQUEST,
@@ -153,16 +168,23 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
             with self.candado:
                 if ruta == "/api/geocodificar":
                     respuesta = self.controlador.previsualizar_geocodificacion(
-                        str(datos.get("direccion", ""))
+                        str(datos.get("direccion") or "")
                     )
                 elif ruta == "/api/usuarios":
                     respuesta = self.controlador.gestionar_usuario(datos)
                 elif ruta == "/api/flota/fabrica":
                     respuesta = self.controlador.crear_dron_desde_fabrica(datos)
                 elif ruta == "/api/flota/recargar":
+                    pct_raw = datos.get("porcentaje")
+                    porcentaje = 100.0
+                    if pct_raw not in (None, ""):
+                        try:
+                            porcentaje = float(pct_raw)
+                        except (ValueError, TypeError):
+                            porcentaje = 100.0
                     respuesta = self.controlador.recargar_bateria_dron(
                         id_dron=str(datos.get("id_dron", "")),
-                        porcentaje=float(datos.get("porcentaje", 100.0)),
+                        porcentaje=porcentaje,
                     )
                 elif ruta == "/api/flota/telemetria":
                     respuesta = self.controlador.gestionar_telemetria_dron(datos)
@@ -170,7 +192,8 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
                     respuesta = self.controlador.registrar_nuevo_pedido(datos)
                 elif ruta == "/api/pedidos/asignar":
                     respuesta = self.controlador.asignar_dron_pedido(
-                        str(datos.get("id_pedido", ""))
+                        id_pedido=str(datos.get("id_pedido", "")).strip(),
+                        id_dron=str(datos.get("id_dron", "")).strip() or None,
                     )
                 elif ruta == "/api/pedidos/cancelar":
                     respuesta = self.controlador.cancelar_pedido(
@@ -192,11 +215,27 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
                         str(datos.get("id_dron", ""))
                     )
                 elif ruta == "/api/simulacion/paso":
+                    dt_raw = datos.get("delta_t")
+                    delta_t = 30.0
+                    if dt_raw not in (None, ""):
+                        try:
+                            delta_t = float(dt_raw)
+                        except (ValueError, TypeError):
+                            delta_t = 30.0
+
+                    esc_raw = datos.get("escala_tiempo")
+                    escala_tiempo = 15.0
+                    if esc_raw not in (None, ""):
+                        try:
+                            escala_tiempo = float(esc_raw)
+                        except (ValueError, TypeError):
+                            escala_tiempo = 15.0
+
                     respuesta = self.controlador.avanzar_simulacion(
                         id_dron=datos.get("id_dron") or None,
-                        delta_t=float(datos.get("delta_t", 30.0)),
+                        delta_t=delta_t,
                         usar_reloj_real=bool(datos.get("usar_reloj_real", False)),
-                        escala_tiempo=float(datos.get("escala_tiempo", 15.0)),
+                        escala_tiempo=escala_tiempo,
                     )
                 elif ruta == "/api/simulacion/reloj":
                     respuesta = self.controlador.controlar_reloj(
