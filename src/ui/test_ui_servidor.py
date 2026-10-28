@@ -416,6 +416,80 @@ class TestServidorUISkyRouteV2(unittest.TestCase):
         self.assertLessEqual(dron_post["bateria"], dron_ini["bateria"])
         self.assertTrue(dron_post["en_vuelo_activo"])
 
+    def test_11_resiliencia_protocolo_http_y_entradas_anomalas(self) -> None:
+        """Prueba exhaustiva de robustez contra entradas anómalas, corrupción de protocolo y valores extremos."""
+        import http.client
+
+        # 1. CORS Preflight OPTIONS
+        conn = http.client.HTTPConnection("127.0.0.1", self.puerto)
+        conn.request("OPTIONS", "/api/pedidos")
+        resp_opt = conn.getresponse()
+        self.assertEqual(resp_opt.status, 204)
+        self.assertEqual(resp_opt.getheader("Access-Control-Allow-Origin"), "*")
+        conn.close()
+
+        # 2. Cabecera Content-Length corrupta no tumba el socket ni provoca desconexión
+        conn = http.client.HTTPConnection("127.0.0.1", self.puerto)
+        conn.request(
+            "POST",
+            "/api/pedidos",
+            body=b"{}",
+            headers={"Content-Type": "application/json", "Content-Length": "corrupto"},
+        )
+        resp_corrupt = conn.getresponse()
+        self.assertEqual(resp_corrupt.status, 400)
+        datos_corrupt = json.loads(resp_corrupt.read().decode())
+        self.assertEqual(datos_corrupt["error_tipo"], "ValueError")
+        self.assertEqual(datos_corrupt["regla_negocio"], "Protocolo de Comunicación HTTP")
+        conn.close()
+
+        # 3. Cuerpo JSON que no es un objeto/diccionario (ej. array plano)
+        conn = http.client.HTTPConnection("127.0.0.1", self.puerto)
+        conn.request(
+            "POST",
+            "/api/pedidos",
+            body=b"[1, 2, 3]",
+            headers={"Content-Type": "application/json"},
+        )
+        resp_arr = conn.getresponse()
+        self.assertEqual(resp_arr.status, 400)
+        datos_arr = json.loads(resp_arr.read().decode())
+        self.assertEqual(datos_arr["error_tipo"], "ValueError")
+        conn.close()
+
+        # 4. Geocodificación con dirección None / vacía
+        cod_geo, res_geo = self._post_json("/api/geocodificar", {"direccion": None})
+        self.assertEqual(cod_geo, 400)
+        self.assertEqual(res_geo["error_tipo"], "GeocodificacionError")
+        self.assertIn("Regla de Negocio #5", res_geo["regla_negocio"])
+
+        # 5. Fábrica de drones con categoría no registrada (debe invocar CategoriaDronInvalidoError)
+        cod_fab, res_fab = self._post_json(
+            "/api/flota/fabrica",
+            {"categoria": "SUBMARINO_NUCLEAR", "id_dron": "SUB-01"},
+        )
+        self.assertEqual(cod_fab, 400)
+        self.assertEqual(res_fab["error_tipo"], "CategoriaDronInvalidoError")
+        self.assertEqual(res_fab["regla_negocio"], "Regla de Negocio #8 · Categorías Autorizadas")
+
+        # 6. Recarga y simulación con campos numéricos None (no debe disparar TypeError)
+        cod_rec, res_rec = self._post_json(
+            "/api/flota/recargar",
+            {"id_dron": "DRON-VIG-07", "porcentaje": None},
+        )
+        self.assertEqual(cod_rec, 200)
+
+        cod_sim, res_sim = self._post_json(
+            "/api/simulacion/paso",
+            {"delta_t": None, "usar_reloj_real": False},
+        )
+        self.assertEqual(cod_sim, 200)
+
+        # 7. Comparador polimórfico con NaN o número negativo en query string
+        cod_poly, res_poly = self._get_json("/api/polimorfismo/viabilidad?distancia_km=nan")
+        self.assertEqual(cod_poly, 400)
+        self.assertEqual(res_poly["error_tipo"], "ValueError")
+
 
 if __name__ == "__main__":
     unittest.main()
