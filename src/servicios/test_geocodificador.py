@@ -130,7 +130,8 @@ class TestServicioGeocodificadorOSM(unittest.TestCase):
         with self.assertRaises(GeocodificacionError):
             self.geocodificador.geocodificar_direccion("LugarInexistente12345XYZ")
 
-    def test_contingencia_catalogo_puntos_referencia(self):
+    @patch('requests.get', side_effect=Exception("Fallo de red para contingencia"))
+    def test_contingencia_catalogo_puntos_referencia(self, mock_get):
         """Verifica que puntos icónicos del Valle se resuelvan incluso ante contingencias de red."""
         coords = self.geocodificador.geocodificar_direccion("Parque Berrio")
         self.assertIsInstance(coords, tuple)
@@ -338,7 +339,8 @@ class TestServicioGeocodificadorGoogle(unittest.TestCase):
         with self.assertRaises(CoordenadaInvalidaError):
             self.geocodificador.geocodificar_direccion("Plaza de Bolívar, Bogotá")
 
-    def test_google_sin_api_key_delega_a_fallback(self):
+    @patch('requests.get', side_effect=Exception("Fallo de red para contingencia"))
+    def test_google_sin_api_key_delega_a_fallback(self, mock_get):
         """Si no se suministra API Key, el servicio delega transparentemente a la contingencia sin error."""
         geo_sin_key = ServicioGeocodificadorGoogle(api_key="", calculador=self.calculador)
         coords = geo_sin_key.geocodificar_direccion("Parque Berrio")

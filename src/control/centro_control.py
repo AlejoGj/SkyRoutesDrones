@@ -236,9 +236,10 @@ class SistemaCentroControl:
                 drones_desocupados.append(dron)
         return drones_desocupados
 
-    def asignar_dron_a_pedido(self, id_pedido: str) -> bool:
+    def asignar_dron_a_pedido(self, id_pedido: str, id_dron: str | None = None) -> bool:
         """
         Ahora asigna el dron evaluando la compatibilidad dinámicamente usando FABRICA_DRONES.
+        Permite especificar opcionalmente un id_dron particular de la flota.
         """
         if not isinstance(id_pedido, str) or not id_pedido.strip():
             print("El ID del pedido debe ser una cadena de texto no vacía.")
@@ -264,6 +265,8 @@ class SistemaCentroControl:
         clase_requerida = FABRICA_DRONES.get(pedido_encontrado.categoria_requerida)
 
         for dron in drones_desocupados:
+            if id_dron and dron.id_dron != id_dron:
+                continue
             categoria_dron = getattr(dron, "categoria", getattr(dron, "modelo_aeronave", None))
             if categoria_dron == pedido_encontrado.categoria_requerida:
                 # Validar autonomía completa para la operación (ida + retorno a base)
