@@ -1223,7 +1223,11 @@ class ControladorSkyRoute:
         """
         delta_reloj = self.reloj.obtener_delta()
         if usar_reloj_real:
-            paso_seg = max(2.0, min(120.0, delta_reloj * max(1.0, float(escala_tiempo))))
+            factor_escala = max(0.1, float(escala_tiempo))
+            if factor_escala == 1.0:
+                paso_seg = max(0.5, min(120.0, delta_reloj))
+            else:
+                paso_seg = max(1.0, min(120.0, delta_reloj * factor_escala))
         else:
             paso_seg = max(1.0, float(delta_t))
 

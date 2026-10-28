@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import json
 import threading
+import time
 import unittest
 from pathlib import Path
 from urllib.error import HTTPError
@@ -360,6 +361,60 @@ class TestServidorUISkyRouteV2(unittest.TestCase):
         self.assertLess(d2_post["bateria"], d2["bateria"])
         self.assertGreater(d1_post["kilometraje_total_km"], 0.0)
         self.assertGreater(d2_post["kilometraje_total_km"], 0.0)
+
+    def test_10_avance_tiempo_real_1a1(self) -> None:
+        """Verifica que el modo de tiempo real 1:1 utilice el delta monotónico real y avance físicamente el dron."""
+        # 1. Crear y despachar pedido para DRON-RESC-06 (Búsqueda y Rescate)
+        cod_ped, res_ped = self._post_json(
+            "/api/pedidos",
+            {
+                "id_pedido": "PED-REAL-01",
+                "categoria_requerida": "BUSQUEDA_RESCATE",
+                "direccion_destino": "Parque de El Poblado",
+                "peso_carga_kg": 2.0,
+            },
+        )
+        self.assertEqual(cod_ped, 200)
+        self._post_json("/api/pedidos/asignar", {"id_pedido": "PED-REAL-01", "id_dron": "DRON-RESC-06"})
+        cod_desp, res_desp = self._post_json(
+            "/api/misiones/despegar",
+            {"id_pedido": "PED-REAL-01", "id_dron": "DRON-RESC-06"},
+        )
+        self.assertEqual(cod_desp, 200)
+        dron_ini = next(d for d in res_desp["flota"] if d["id_dron"] == "DRON-RESC-06")
+        self.assertTrue(dron_ini["en_vuelo_activo"])
+
+        # 2. Esperar una fracción de tiempo real controlada (0.6s)
+        time.sleep(0.6)
+
+        # 3. Avanzar pulso en modo tiempo real estricto (usar_reloj_real=True, escala_tiempo=1.0)
+        cod_paso, res_paso = self._post_json(
+            "/api/simulacion/paso",
+            {
+                "id_dron": "DRON-RESC-06",
+                "usar_reloj_real": True,
+                "escala_tiempo": 1.0,
+                "delta_t": 5.0,
+            },
+        )
+        self.assertEqual(cod_paso, 200)
+
+        # El delta aplicado debe coincidir con el tiempo transcurrido en el reloj monotónico (~0.6s),
+        # y NO con delta_t (5.0s) ni con escala acelerada (15.0).
+        delta_aplicado = res_paso["delta_aplicado_seg"]
+        self.assertGreaterEqual(delta_aplicado, 0.5)
+        self.assertLess(delta_aplicado, 3.0)
+
+        # Verificar emisión del pulso y avance físico positivo
+        self.assertGreater(len(res_paso["pulsos_emitidos"]), 0)
+        pulso = res_paso["pulsos_emitidos"][0]
+        self.assertEqual(pulso["id_dron"], "DRON-RESC-06")
+        self.assertGreater(pulso["delta_km"], 0.0)
+
+        # Verificar telemetría actualizada del dron
+        dron_post = next(d for d in res_paso["flota"] if d["id_dron"] == "DRON-RESC-06")
+        self.assertLessEqual(dron_post["bateria"], dron_ini["bateria"])
+        self.assertTrue(dron_post["en_vuelo_activo"])
 
 
 if __name__ == "__main__":

@@ -11,9 +11,11 @@
         vistaActiva: "operaciones",
         dronCabinaId: "DRON-ENT-01",
         dronInspectorId: "DRON-ENT-01",
-        modoSimulacion: "paso", // "paso" | "auto"
+        modoSimulacion: "paso", // "paso" | "auto" | "realtime"
         simularSoloEnfocado: false, // false: simula toda la flota activa simultáneamente
         timerAuto: null,
+        timerRealtime: null,
+        cadenciaRealtimeSeg: 5,
         modoDestinoPedido: "direccion", // "direccion" | "coordenadas"
         filtroPedidos: "TODOS",
         distanciaPolimorfismoKm: 15.0,
@@ -467,9 +469,12 @@
         $("btnOrdenarRetorno").disabled = !(dron.en_mision && dron.pedido_activo_id);
         $("btnAterrizarManual").classList.toggle("is-hidden", !dron.puede_aterrizar_manual);
 
-        // Si estaba corriendo el reloj automático y ya no queda ningún dron en vuelo, detenerlo limpiamente
+        // Si estaba corriendo el reloj automático o de tiempo real y ya no queda ningún dron en vuelo, detenerlo limpiamente
         if (estadoUI.timerAuto && !hayAlgunoEnVuelo) {
             detenerAutoSimulacion();
+        }
+        if (estadoUI.timerRealtime && !hayAlgunoEnVuelo) {
+            detenerSimulacionTiempoReal();
         }
 
         // 5. Tarjeta de Certificación Final
@@ -554,10 +559,15 @@
         estadoUI.modoSimulacion = modo;
         $("btnModePaso").classList.toggle("is-active", modo === "paso");
         $("btnModeAuto").classList.toggle("is-active", modo === "auto");
+        $("btnModeRealtime").classList.toggle("is-active", modo === "realtime");
         $("controlsPasoAPaso").classList.toggle("is-hidden", modo !== "paso");
         $("controlsAutomatico").classList.toggle("is-hidden", modo !== "auto");
-        if (modo === "paso" && estadoUI.timerAuto) {
+        $("controlsTiempoReal").classList.toggle("is-hidden", modo !== "realtime");
+        if (modo !== "auto" && estadoUI.timerAuto) {
             detenerAutoSimulacion();
+        }
+        if (modo !== "realtime" && estadoUI.timerRealtime) {
+            detenerSimulacionTiempoReal();
         }
     }
 
@@ -588,6 +598,9 @@
 
     function iniciarAutoSimulacion() {
         if (estadoUI.timerAuto) return;
+        if (estadoUI.timerRealtime) {
+            detenerSimulacionTiempoReal();
+        }
         $("labelToggleAutoPlay").textContent = "Pausar Reloj Continuo";
         const ciclo = async () => {
             const salto = Number($("selectAutoDelta").value) || 25;
@@ -603,6 +616,86 @@
             estadoUI.timerAuto = null;
         }
         $("labelToggleAutoPlay").textContent = "Iniciar Reloj Continuo";
+    }
+
+    async function ejecutarPulsoTiempoReal(silencioso = true) {
+        const snapshot = estadoUI.snapshot;
+        if (!snapshot) return;
+
+        const hayEnVuelo = snapshot.flota && snapshot.flota.some((d) => d.en_vuelo_activo);
+        if (!hayEnVuelo) {
+            detenerSimulacionTiempoReal();
+            return;
+        }
+
+        const dronActual = snapshot.flota.find((d) => d.id_dron === estadoUI.dronCabinaId);
+        const idObjetivo = estadoUI.simularSoloEnfocado && dronActual && dronActual.en_vuelo_activo
+            ? dronActual.id_dron
+            : null;
+
+        const cadencia = Number($("selectRealtimeCadencia")?.value) || estadoUI.cadenciaRealtimeSeg || 5;
+
+        try {
+            const nuevoEstado = await peticionAPI("/api/simulacion/paso", {
+                metodo: "POST",
+                cuerpo: {
+                    id_dron: idObjetivo,
+                    delta_t: cadencia,
+                    usar_reloj_real: true,
+                    escala_tiempo: 1.0,
+                },
+            });
+            aplicarSnapshot(nuevoEstado, !silencioso || Boolean(nuevoEstado.mensaje_operacion));
+        } catch (_e) {
+            detenerSimulacionTiempoReal();
+        }
+    }
+
+    function iniciarSimulacionTiempoReal() {
+        if (estadoUI.timerRealtime) return;
+        if (estadoUI.timerAuto) {
+            detenerAutoSimulacion();
+        }
+
+        const hayEnVuelo = estadoUI.snapshot?.flota?.some((d) => d.en_vuelo_activo);
+        if (!hayEnVuelo) {
+            mostrarNotificacion({
+                tipo: "info",
+                insignia: "TIEMPO REAL (1:1)",
+                titulo: "Sin aeronaves en vuelo",
+                mensaje: "Despega un dron o inicia una misión para observar el avance físico en tiempo real.",
+            });
+            return;
+        }
+
+        const cadenciaSeg = Number($("selectRealtimeCadencia")?.value) || 5;
+        estadoUI.cadenciaRealtimeSeg = cadenciaSeg;
+
+        $("labelToggleRealtimePlay").textContent = "Pausar Tiempo Real (1:1)";
+        const btnFlota = $("btnTiempoRealFlota");
+        if (btnFlota) {
+            btnFlota.classList.add("is-running");
+            $("labelTiempoRealFlota").textContent = `Tiempo Real Activo (${cadenciaSeg}s)`;
+        }
+
+        const ciclo = async () => {
+            await ejecutarPulsoTiempoReal(true);
+        };
+
+        estadoUI.timerRealtime = window.setInterval(ciclo, cadenciaSeg * 1000);
+    }
+
+    function detenerSimulacionTiempoReal() {
+        if (estadoUI.timerRealtime) {
+            window.clearInterval(estadoUI.timerRealtime);
+            estadoUI.timerRealtime = null;
+        }
+        $("labelToggleRealtimePlay").textContent = "Iniciar Tiempo Real (1:1)";
+        const btnFlota = $("btnTiempoRealFlota");
+        if (btnFlota) {
+            btnFlota.classList.remove("is-running");
+            $("labelTiempoRealFlota").textContent = "Tiempo Real (1:1)";
+        }
     }
 
     // ==========================================================================
@@ -992,6 +1085,31 @@
         // Controles de Simulación Temporal
         $("btnModePaso").addEventListener("click", () => cambiarModoSimulacion("paso"));
         $("btnModeAuto").addEventListener("click", () => cambiarModoSimulacion("auto"));
+        $("btnModeRealtime").addEventListener("click", () => cambiarModoSimulacion("realtime"));
+
+        $("btnToggleRealtimePlay").addEventListener("click", () => {
+            if (estadoUI.timerRealtime) {
+                detenerSimulacionTiempoReal();
+            } else {
+                iniciarSimulacionTiempoReal();
+            }
+        });
+
+        $("btnTiempoRealFlota").addEventListener("click", () => {
+            if (estadoUI.timerRealtime) {
+                detenerSimulacionTiempoReal();
+            } else {
+                iniciarSimulacionTiempoReal();
+            }
+        });
+
+        $("selectRealtimeCadencia").addEventListener("change", (ev) => {
+            estadoUI.cadenciaRealtimeSeg = Number(ev.target.value) || 5;
+            if (estadoUI.timerRealtime) {
+                detenerSimulacionTiempoReal();
+                iniciarSimulacionTiempoReal();
+            }
+        });
 
         $("btnAvanzarPulso").addEventListener("click", () => {
             const dt = Number($("inputDeltaT").value) || 30;
@@ -1382,6 +1500,7 @@
         const btn = $("btnIniciarTour");
         btn.disabled = true;
         detenerAutoSimulacion();
+        detenerSimulacionTiempoReal();
         cambiarVista("operaciones");
 
         try {

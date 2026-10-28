@@ -678,6 +678,13 @@ button:disabled {
     margin-bottom: 16px;
 }
 
+.card-header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .card-title {
     font-family: var(--font-serif);
     font-size: 1.45rem;
@@ -1240,6 +1247,64 @@ button:disabled {
 
 #selectAutoDelta {
     width: 132px;
+}
+
+#selectRealtimeCadencia {
+    width: 156px;
+}
+
+.realtime-badge-hint {
+    font-family: var(--font-mono);
+    font-size: 0.73rem;
+    font-weight: 600;
+    color: var(--ink-700);
+    background: var(--bg-inset);
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border-hairline);
+    white-space: nowrap;
+}
+
+.btn-realtime-flota {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: all 0.2s ease;
+}
+
+.btn-realtime-flota.is-running {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.45);
+    color: #047857;
+    font-weight: 600;
+}
+
+.btn-realtime-flota .pulse-indicator {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--ink-500);
+    opacity: 0.5;
+    transition: all 0.2s ease;
+}
+
+.btn-realtime-flota.is-running .pulse-indicator {
+    background: #10b981;
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    animation: pulseRing 1.5s infinite;
+}
+
+@keyframes pulseRing {
+    0% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+    }
 }
 
 .quick-deltas,

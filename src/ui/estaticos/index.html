@@ -284,6 +284,9 @@
                                     <button type="button" class="seg-btn" data-sim-mode="auto" id="btnModeAuto">
                                         Automática Animada
                                     </button>
+                                    <button type="button" class="seg-btn" data-sim-mode="realtime" id="btnModeRealtime">
+                                        Tiempo Real (1:1)
+                                    </button>
                                 </div>
 
                                 <!-- Controles Paso a Paso -->
@@ -322,6 +325,24 @@
                                         </svg>
                                         <span id="labelToggleAutoPlay">Iniciar Reloj Continuo</span>
                                     </button>
+                                </div>
+
+                                <!-- Controles Tiempo Real (1:1 Físico) -->
+                                <div class="sim-control-group is-hidden" id="controlsTiempoReal">
+                                    <label class="inline-field">
+                                        <span>Cadencia física</span>
+                                        <select id="selectRealtimeCadencia">
+                                            <option value="5" selected>Cada 5 s (1:1)</option>
+                                            <option value="10">Cada 10 s (1:1)</option>
+                                        </select>
+                                    </label>
+                                    <button type="button" class="btn-primary" id="btnToggleRealtimePlay">
+                                        <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <polygon points="5 3 19 12 5 21 5 3"/>
+                                        </svg>
+                                        <span id="labelToggleRealtimePlay">Iniciar Tiempo Real (1:1)</span>
+                                    </button>
+                                    <span class="realtime-badge-hint" id="realtimeStatusBadge">1s reloj = 1s vuelo</span>
                                 </div>
 
                                 <!-- Maniobras de Seguridad en Vuelo -->
@@ -392,9 +413,15 @@
                                     <span class="eyebrow">Aeronaves Especializadas (6 Subclases)</span>
                                     <h2 class="card-title">Estado de la Flota Activa</h2>
                                 </div>
-                                <button type="button" class="btn-secondary btn-sm" id="btnSincronizarFlota">
-                                    Sincronizar Telemetría (RF-05)
-                                </button>
+                                <div class="card-header-actions">
+                                    <button type="button" class="btn-secondary btn-sm btn-realtime-flota" id="btnTiempoRealFlota" title="Activar simulación física 1:1 en tiempo real para todos los drones en vuelo (cadencia 5s/10s)">
+                                        <span class="pulse-indicator"></span>
+                                        <span id="labelTiempoRealFlota">Tiempo Real (1:1)</span>
+                                    </button>
+                                    <button type="button" class="btn-secondary btn-sm" id="btnSincronizarFlota">
+                                        Sincronizar Telemetría (RF-05)
+                                    </button>
+                                </div>
                             </div>
                             <div id="fleetCardsGrid" class="fleet-cards-grid"></div>
                         </article>
