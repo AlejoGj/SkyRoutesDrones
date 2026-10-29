@@ -346,158 +346,622 @@ https://drive.google.com/file/d/1L1QFliRs5vp0Q_SnUW9ahnXzg7J49c-M/view?usp=shari
 
 ```mermaid
 classDiagram
-    %% ==========================================
-    %% 1. ORQUESTADOR CENTRAL
-    %% ==========================================
-    
+    %% =========================================================================
+    %% 1. CAPA DE INTERFAZ GRÁFICA WEB, SERVIDOR HTTP Y CONSOLA INTERACTIVA
+    %% =========================================================================
+
+    class InterfazWebSPA {
+        <<Frontend_SPA>>
+        -snapshot: dict
+        -vistaActiva: str
+        -dronCabinaId: str
+        -dronInspectorId: str
+        -modoSimulacion: str
+        -simularSoloEnfocado: bool
+        -timerAuto: int
+        -timerRealtime: int
+        -cadenciaRealtimeSeg: int
+        -modoDestinoPedido: str
+        -filtroPedidos: str
+        -distanciaPolimorfismoKm: float
+        -datosPolimorfismo: dict
+        -selectsInicializados: bool
+        +iniciar() None
+        +enlazarEventos() None
+        +peticionAPI(ruta: str, opciones: dict) Promise~dict~
+        +aplicarSnapshot(snapshot: dict, mostrarMensaje: bool) None
+        +cambiarVista(nombreVista: str) None
+        +cambiarModoSimulacion(modo: str) None
+        +inicializarSelectoresEstaticos(snapshot: dict) None
+        +renderizarBarraGlobal(snapshot: dict) None
+        +renderizarCabinaOperaciones(snapshot: dict) None
+        +renderizarFlotaEInspector(snapshot: dict) None
+        +renderizarCamposDinamicosFabrica(categoria: str) None
+        +renderizarDespachoYUsuarios(snapshot: dict) None
+        +cargarComparativaPolimorfica(distanciaKm: float, sincronizarControles: bool) Promise~None~
+        +renderizarBitacora(snapshot: dict) None
+        +ejecutarPulsoSimulacion(deltaSeg: float, silencioso: bool) Promise~None~
+        +iniciarAutoSimulacion() None
+        +detenerAutoSimulacion() None
+        +ejecutarPulsoTiempoReal(silencioso: bool) Promise~None~
+        +iniciarSimulacionTiempoReal() None
+        +detenerSimulacionTiempoReal() None
+        +lanzarTourGuiado() Promise~None~
+        +mostrarNotificacion(config: dict) None
+    }
+
+    class BaseHTTPRequestHandler {
+        <<Standard_Library>>
+        +path: str
+        +headers: Message
+        +rfile: BufferedReader
+        +wfile: BufferedWriter
+        +send_response(code: int) None
+        +send_header(keyword: str, value: str) None
+        +end_headers() None
+    }
+
+    class ManejadorSkyRouteHTTP {
+        +DIRECTORIO_ESTATICOS: Path$
+        +TIPOS_MIME: dict~str, str~$
+        +controlador: ControladorSkyRoute$
+        +candado: RLock$
+        +log_message(format: str, args: Any) None
+        -_enviar_json(payload: dict, codigo_http: int) None
+        -_servir_archivo_estatico(nombre_relativo: str) None
+        -_leer_cuerpo_json() dict
+        +do_GET() None
+        +do_POST() None
+        +crear_servidor(host: str, puerto_inicial: int, controlador: ControladorSkyRoute)$ tuple~ThreadingHTTPServer, int~
+        +iniciar_aplicacion(host: str, puerto: int, abrir_navegador: bool)$ None
+    }
+
+    class ControladorSkyRoute {
+        +ETIQUETAS_CATEGORIA: dict~str, str~$
+        +ESQUEMA_FABRICA: dict~str, dict~$
+        +SUGERENCIAS_DIRECCIONES: list~dict~$
+        +calculador: CalculadorGeodesico
+        +geocodificador: IServicioGeocodificador
+        +servicio_clima: ServicioClimaAburra
+        +centro: SistemaCentroControl
+        +simulador: SimuladorVuelo
+        +reloj: RelojSimulacion
+        -_usuario_activo_id: str
+        -_nodo_clima_activo: str
+        -_clima_actual: dict~str, Any~
+        -_sesiones_vuelo: dict~str, dict~
+        -_fuentes_geocodificacion: dict~str, str~
+        -_contador_secuencial: int
+        -_inicializar_entorno_base() None
+        -_buscar_dron(id_dron: str) Dron
+        -_buscar_pedido(id_pedido: str) Pedido
+        -_buscar_usuario(id_usuario: str) Usuario
+        -_buscar_pedido_por_id_seguro(id_pedido: str) Pedido
+        -_pedido_reservado_para_dron(dron: Dron) Pedido
+        -_extraer_atributos_especializados(dron: Dron) list~dict~
+        -_calcular_progreso_lineal(dron: Dron, sesion: dict, distancia_a_base_km: float) dict
+        -_serializar_dron(dron: Dron) dict
+        -_diagnosticar_candidatos_pedido(pedido: Pedido) dict
+        -_serializar_pedido(pedido: Pedido) dict
+        +obtener_estado_completo() dict
+        +consultar_clima_nodo(nodo: str) dict
+        +previsualizar_geocodificacion(direccion: str) dict
+        +comparar_viabilidad_polimorfica(distancia_km: float) dict
+        +gestionar_usuario(datos: dict) dict
+        +crear_dron_desde_fabrica(datos: dict) dict
+        +recargar_bateria_dron(id_dron: str, porcentaje: float) dict
+        +gestionar_telemetria_dron(datos: dict) dict
+        +registrar_nuevo_pedido(datos: dict) dict
+        +asignar_dron_pedido(id_pedido: str) dict
+        +cancelar_pedido(id_pedido: str) dict
+        +despegar_mision(id_pedido: str, modo_despacho: str, actualizar_clima: bool, id_dron: str) dict
+        +avanzar_simulacion(id_dron: str, delta_t: float, usar_reloj_real: bool, escala_tiempo: float) dict
+        +ordenar_retorno_base(id_dron: str) dict
+        +finalizar_retorno_manual(id_dron: str) dict
+        +controlar_reloj(accion: str) dict
+        +preparar_tour_guiado() dict
+        +formatear_excepcion(exc: Exception)$ dict
+    }
+
+    class ConsolaSkyRoute {
+        +LINEA_DOBLE: str$
+        +LINEA_SIMPLE: str$
+        +calculador: CalculadorGeodesico
+        +servicio_clima: ServicioClimaAburra
+        +geocodificador: ServicioGeocodificadorArcGIS
+        +centro: SistemaCentroControl
+        +simulador: SimuladorVuelo
+        +reloj: RelojSimulacion
+        +cliente: Usuario
+        +operador: Usuario
+        -_inicializar_entorno_base() None
+        +barra_bateria(porcentaje: float, ancho: int) str
+        +encabezado(titulo: str) None
+        +pausar() None
+        +ver_estado_flota() None
+        +registrar_pedido_interactivo() Pedido
+        +asignar_dron_interactivo() None
+        +simular_vuelo_interactivo() None
+        +comparar_consumo_polimorfico() None
+        +ver_bitacora_auditoria() None
+        +ejecutar_demo_guiada() None
+        +ejecutar() None
+    }
+
+    %% =========================================================================
+    %% 2. ORQUESTADOR CENTRAL, SIMULACIÓN CINEMÁTICA Y RELOJ TEMPORAL
+    %% =========================================================================
+
+    class ResumenRefrescoFlota {
+        <<dict>>
+        +__int__() int
+        +__index__() int
+    }
+
     class SistemaCentroControl {
-        -flotaDrones: list~Dron~
-        -usuariosRegistrados: list~Usuario~
-        -pedidos: list~Pedido~
-        -historialLogs: list~LogOperacion~
-        -coordenadasBase: tuple~float, float~
-        +refrescarDatosFlota()
-        +registrarUsuario(idUsuario: str, nombre: str, rol: str) Usuario
-        +registrarPedido(usuario: Usuario, categoria: str, destino: tuple) Pedido
-        +asignarDronAPedido(idPedido: str) bool
-        +obtenerDronesDisponibles() list~Dron~
-        +gestionarRetornoABase(idDron: str)
-        +generarLog(evento: str, idDron: str, idPedido: str) LogOperacion
+        +LAT_BASE: float$
+        +LON_BASE: float$
+        +COORDENADAS_BASE: tuple~float, float~$
+        +FABRICA_DRONES: dict~str, TypeDron~$
+        +flota_drones: list~Dron~
+        +usuarios_registrados: list~Usuario~
+        +pedidos: list~Pedido~
+        +historial_logs: list~LogOperacion~
+        +coordenadas_base: tuple~float, float~
+        +geocodificador: IServicioGeocodificador
+        +reloj: RelojSimulacion
+        +servicio_clima: ServicioClimaAburra
+        +simulador: SimuladorVuelo
+        -_cache_clima: dict~str, Any~
+        -_nodo_cache_clima: str
+        -_ts_cache_clima: float
+        +registrar_subclase_en_fabrica(categoria: str, clase_dron: TypeDron)$ None
+        +instanciar_dron_desde_fabrica(categoria: str, args: Any, kwargs: Any)$ Dron
+        -_obtener_clima_con_cache(nombre_nodo: str, ttl_segundos: float) dict
+        +agregar_dron(dron: Dron) Dron
+        +registrar_usuario(usuario: Usuario) Usuario
+        +registrar_pedido(pedido: Pedido) Pedido
+        +obtener_drones_disponibles() list~Dron~
+        +asignar_dron_a_pedido(id_pedido: str) bool
+        +despachar_mision(id_pedido: str) bool
+        +gestionar_retorno_a_base(id_dron: str) bool
+        +generar_log(evento: str, id_dron: str, id_pedido: str, detalles: str, tipo_evento: str) LogOperacion
+        +refrescar_datos_flota(nombre_nodo: str, delta_t: float, factor_clima: float) ResumenRefrescoFlota
+        +__str__() str
+        +__repr__() str
     }
 
-    %% ==========================================
-    %% 2. GESTIÓN DE USUARIOS, PEDIDOS Y LOGS
-    %% ==========================================
-    class Usuario {
-        -idUsuario: str
-        -nombre: str
-        -rol: str
-        +validarRol() bool
+    class SimuladorVuelo {
+        +calculador: ICalculadorGeodesico
+        +centro_control: SistemaCentroControl
+        +avanzar_paso_tiempo(dron: Dron, delta_t: float, factor_clima: float, coordenada_objetivo: tuple) dict
+        +avanzar_flota(flota: list~Dron~, delta_t: float, factor_clima: float) list~dict~
     }
 
-    class Pedido {
-        -idPedido: str
-        -usuarioSolicitante: Usuario
-        -categoriaRequerida: str
-        -coordenadaDestino: tuple~float, float~
-        -pesoCargaKg: float
-        -estado: str
-        -dronAsignado: Dron
-        +actualizarEstado(nuevoEstado: str)
-        +vincularDron(dron: Dron)
+    class RelojSimulacion {
+        +tiempo_inicio: float
+        +ultima_actualizacion: float
+        +pausado: bool
+        +obtener_tiempo_total_seg() float
+        +obtener_delta() float
+        +reiniciar() None
     }
 
     class LogOperacion {
-        -idLog: str
-        -fechaHora: str
-        -tipoEvento: str
-        -idDron: str
-        -idPedido: str
-        -detalles: str
-        +formatearRegistro() str
+        +id_log: str
+        +fecha_hora: str
+        +tipo_evento: str
+        +id_dron: str
+        +id_pedido: str
+        +detalles: str
+        +formatear_registro() str
+        +__str__() str
+        +__repr__() str
     }
 
-    %% ==========================================
-    %% 3. TELEMETRÍA Y CÁLCULO
-    %% ==========================================
+    %% =========================================================================
+    %% 3. SERVICIOS DE GEODESIA, GEOCODIFICACIÓN Y METEOROLOGÍA
+    %% =========================================================================
+
+    class ICalculadorGeodesico {
+        <<interface>>
+        +LAT_MIN_ABURRA: float$
+        +LAT_MAX_ABURRA: float$
+        +LON_MIN_ABURRA: float$
+        +LON_MAX_ABURRA: float$
+        +radio_tierra_km: float
+        +validar_coordenada(coordenada: tuple~float, float~)* None
+        +calcular_haversine(origen: tuple, destino: tuple)* float
+        +calcular_tiempo_vuelo_min(distancia_km: float, velocidad_km_h: float)* float
+        +calcular_punto_intermedio(origen: tuple, destino: tuple, fraccion: float)* tuple~float, float~
+    }
+
     class CalculadorGeodesico {
-        -radioTierraKm: float
-        +calcularHaversine(origen: tuple, destino: tuple) float
-        +calcularTiempoVueloMin(distanciaKm: float, velocidadKmH: float) float
+        +radio_tierra_km: float
+        +validar_coordenada(coordenada: tuple~float, float~) None
+        +calcular_haversine(origen: tuple, destino: tuple) float
+        +calcular_tiempo_vuelo_min(distancia_km: float, velocidad_km_h: float) float
+        +calcular_punto_intermedio(origen: tuple, destino: tuple, fraccion: float) tuple~float, float~
+    }
+
+    class IServicioGeocodificador {
+        <<interface>>
+        +geocodificar_direccion(direccion: str)* tuple~float, float~
+        +obtener_detalle_direccion(direccion: str)* dict
+    }
+
+    class ServicioGeocodificadorArcGIS {
+        +URL_ARCGIS: str$
+        +SCORE_MINIMO: float$
+        +calculador: ICalculadorGeodesico
+        +proveedor_fallback: IServicioGeocodificador
+        +score_minimo: float
+        +normalizar_consulta(direccion: str) str
+        +geocodificar_direccion(direccion: str) tuple~float, float~
+        +obtener_detalle_direccion(direccion: str) dict
+    }
+
+    class ServicioGeocodificadorGoogle {
+        +URL_GOOGLE: str$
+        +calculador: ICalculadorGeodesico
+        +api_key: str
+        +proveedor_fallback: IServicioGeocodificador
+        +normalizar_consulta(direccion: str) str
+        +geocodificar_direccion(direccion: str) tuple~float, float~
+        +obtener_detalle_direccion(direccion: str) dict
+    }
+
+    class ServicioGeocodificadorOSM {
+        +URL_NOMINATIM: str$
+        +USER_AGENT: str$
+        +MAPA_PREFIJOS_VIALES: list~tuple~$
+        +PATRON_CUADRICULA: Pattern$
+        +CRUCES_COMPLEMENTARIOS: dict~str, str~$
+        +TIPOS_NO_DESEADOS_SI_BUSCA_VIA: set~str~$
+        +calculador: ICalculadorGeodesico
+        +proveedor_fallback: IServicioGeocodificador
+        +normalizar_consulta(direccion: str) str
+        +generar_consultas_candidatas(direccion: str) list~str~
+        -_es_resultado_valido(item: dict, requiere_nivel_via: bool) bool
+        +geocodificar_direccion(direccion: str) tuple~float, float~
+        +obtener_detalle_direccion(direccion: str) dict
+    }
+
+    class ServicioGeocodificadorLocal {
+        +PUNTOS_REFERENCIA_ABURRA: dict~str, tuple~$
+        +calculador: ICalculadorGeodesico
+        +geocodificar_direccion(direccion: str) tuple~float, float~
+        +obtener_detalle_direccion(direccion: str) dict
+    }
+
+    class ServicioClimaAburra {
+        +NODOS_ABURRA: dict~str, dict~$
+        +url_base: str
+        +obtener_condiciones(nombre_nodo: str) dict
+    }
+
+    %% =========================================================================
+    %% 4. GESTIÓN COMERCIAL Y TELEMETRÍA SENSORIAL
+    %% =========================================================================
+
+    class Usuario {
+        +ROLES_PERMITIDOS: list~str~$
+        +id_usuario: str
+        +nombre: str
+        +rol: str
+        +validar_rol() bool
+        +validar_usuario() bool
+        +__str__() str
+        +__repr__() str
+    }
+
+    class Pedido {
+        +categorias_permitidas: list~str~$
+        +estados_permitidos: list~str~$
+        +id_pedido: str
+        +usuario_solicitante: Usuario
+        +categoria_requerida: str
+        +categoria: str
+        +coordenada_destino: tuple~float, float~
+        +direccion_destino: str
+        +peso_carga_kg: float
+        +estado: str
+        +dron_asignado: Dron
+        +actualizar_estado(nuevo_estado: str) None
+        +vincular_dron(dron: Dron) None
+        +__str__() str
+        +__repr__() str
     }
 
     class TelemetriaDrone {
-        -idDron: str
-        -bateria: float
-        -altitud: float
-        -estadoMotores: str
-        -latitud: float
-        -longitud: float
-        +validarRangos() bool
-        +_validarCoherenciaVuelo() bool
-        +actualizarTrama(bateria: float, altitud: float, motores: str, lat: float, lon: float)
+        +id_dron: str
+        +bateria: float
+        +altitud: float
+        +estado_motores: str
+        +coordenadas: tuple~float, float~
+        +latitud: float
+        +longitud: float
+        +validar_datos(id_dron: str, bateria: float, altitud: float, estado_motores: str, coordenadas: tuple) bool
+        +actualizar_trama(bateria: float, altitud: float, estado_motores: str, coordenadas: tuple) None
+        +__str__() str
+        +__repr__() str
     }
 
-    %% ==========================================
-    %% 4. CLASE BASE DE FLOTA
-    %% ==========================================
+    %% =========================================================================
+    %% 5. CLASE ABSTRACTA BASE DE FLOTA Y 6 SUBCLASES ESPECIALIZADAS
+    %% =========================================================================
+
     class Dron {
-        -idDron: str
-        -modeloAeronave: str
-        -velocidadPromedioKmH: float
-        -kilometrajeTotal: float
-        -disponible: bool
-        -enMision: bool
-        -retornandoABase: bool
-        -telemetria: TelemetriaDrone
-        -calculador: CalculadorGeodesico
-        +asignarNuevaTelemetria(nuevaTelemetria: TelemetriaDrone)
-        +calcularDistanciaADestino(destino: tuple) float
-        +estimarTiempoLlegadaMin(destino: tuple) float
-        +iniciarRetornoBase(coordenadasBase: tuple)
-        +cambiarDisponibilidad(estado: bool)
+        <<abstract>>
+        +id_dron: str
+        +modelo_aeronave: str
+        +velocidad_promedio_kmh: float
+        +kilometraje_total_km: float
+        +disponible: bool
+        +en_mision: bool
+        +retornando_a_base: bool
+        +coordenadas_base: tuple~float, float~
+        +pedido_activo: Pedido
+        +ultimo_pedido_completado: Pedido
+        +telemetria: TelemetriaDrone
+        +calculador: ICalculadorGeodesico
+        -_historial_telemetria: list~str~
+        +historial_telemetria: tuple~str~
+        -__post_init__() None
+        +ejecutar_mision(pedido: Pedido)* dict
+        +calcular_consumo_estimado(distancia_km: float)* float
+        +inspeccionar_sistemas_especializados()* str
+        +predecir_viabilidad_mision(distancia_km: float) dict
+        +actualizar_estado_disponibilidad(disponible: bool) None
+        +asignar_telemetria(nueva_telemetria: TelemetriaDrone) None
+        +actualizar_telemetria(bateria_o_telemetria: float, altitud: float, estado_motores: str, coordenadas: tuple) None
+        +recargar_bateria(porcentaje: float) None
+        +calcular_distancia_a_destino(destino: tuple) float
+        +estimar_tiempo_llegada_min(destino: tuple) float
+        +iniciar_retorno_base(coordenadas_base: tuple) None
+        +finalizar_retorno_en_base() None
+        +finalizar_mision_en_destino() dict
+        +__str__() str
+        +__repr__() str
     }
 
-    %% ==========================================
-    %% 5. SUBCLASES ESPECIALIZADAS (6 TIPOS)
-    %% ==========================================
     class DronEntregaLigera {
-        -pesoMaximoPaqueteKg: float
-        -compartimentoRefrigerado: bool
-        -mecanismoSueltaRapida: bool
+        +CATEGORIA_ESPECIALIZADA: str$
+        +CAPACIDAD_CARGA_DEFAULT_KG: float$
+        +categoria: str
+        #_capacidad_carga_kg: float
+        #_compartimento_refrigerado: bool
+        #_mecanismo_suelta_rapida: bool
+        +es_apto_carga(peso_carga_kg: float) bool
+        +ejecutar_mision(pedido: Pedido) dict
+        +calcular_consumo_estimado(distancia_km: float) float
+        +inspeccionar_sistemas_especializados() str
+        +__str__() str
+        +__repr__() str
     }
 
     class DronCargaPesada {
-        -volumenCargaM3: float
-        -numeroRotores: int
-        -potenciaRemolqueW: float
+        +CATEGORIA_ESPECIALIZADA: str$
+        +VOLUMEN_DEFAULT_M3: float$
+        +ROTORES_DEFAULT: int$
+        +POTENCIA_REMOLQUE_DEFAULT_W: float$
+        +categoria: str
+        #_volumen_carga_m3: float
+        #_numero_rotores: int
+        #_potencia_remolque_w: float
+        +ejecutar_mision(pedido: Pedido) dict
+        +calcular_consumo_estimado(distancia_km: float) float
+        +inspeccionar_sistemas_especializados() str
+        +__str__() str
+        +__repr__() str
     }
 
     class DronVigilancia {
-        -resolucionCamaraMp: int
-        -visionNocturna: bool
-        -frecuenciaTransmisionGhz: float
+        +CATEGORIA_ESPECIALIZADA: str$
+        +RESOLUCION_DEFAULT_MP: int$
+        +VISION_NOCTURNA_DEFAULT: bool$
+        +FRECUENCIA_DEFAULT_GHZ: float$
+        +categoria: str
+        #_resolucion_camara_mp: int
+        #_vision_nocturna: bool
+        #_frecuencia_transmision_ghz: float
+        +ejecutar_mision(pedido: Pedido) dict
+        +calcular_consumo_estimado(distancia_km: float) float
+        +inspeccionar_sistemas_especializados() str
+        +predecir_viabilidad_mision(distancia_km: float) dict
+        +__str__() str
+        +__repr__() str
     }
 
     class DronMapeo {
-        -tieneSensorLidar: bool
-        -precisionGpsCm: float
-        -capacidadAlmacenamientoTb: float
+        +CATEGORIA_ESPECIALIZADA: str$
+        +LIDAR_DEFAULT: bool$
+        +PRECISION_GPS_DEFAULT_CM: float$
+        +ALMACENAMIENTO_DEFAULT_TB: float$
+        +categoria: str
+        #_tiene_sensor_lidar: bool
+        #_precision_gps_cm: float
+        #_capacidad_almacenamiento_tb: float
+        +ejecutar_mision(pedido: Pedido) dict
+        +calcular_consumo_estimado(distancia_km: float) float
+        +inspeccionar_sistemas_especializados() str
+        +__str__() str
+        +__repr__() str
     }
 
     class DronInspeccion {
-        -zoomOpticoX: int
-        -rangoSensorUltrasonicoM: float
+        +CATEGORIA_ESPECIALIZADA: str$
+        +ZOOM_DEFAULT_X: int$
+        +ULTRASONICO_DEFAULT_M: float$
+        +categoria: str
+        #_zoom_optico_x: int
+        #_rango_sensor_ultrasonico_m: float
+        +ejecutar_mision(pedido: Pedido) dict
+        +calcular_consumo_estimado(distancia_km: float) float
+        +inspeccionar_sistemas_especializados() str
+        +predecir_viabilidad_mision(distancia_km: float) dict
+        +__str__() str
+        +__repr__() str
     }
 
     class DronRescate {
-        -camaraTermica: bool
-        -kitAuxiliosEquipado: bool
-        -potenciaAltavozDb: int
+        +CATEGORIA_ESPECIALIZADA: str$
+        +CAMARA_TERMICA_DEFAULT: bool$
+        +KIT_AUXILIOS_DEFAULT: bool$
+        +POTENCIA_ALTAVOZ_DEFAULT_DB: int$
+        +categoria: str
+        #_camara_termica: bool
+        #_kit_auxilios_equipado: bool
+        #_potencia_altavoz_db: int
+        +potenciaAltavozDb: int
+        +ejecutar_mision(pedido: Pedido) dict
+        +calcular_consumo_estimado(distancia_km: float) float
+        +inspeccionar_sistemas_especializados() str
+        +predecir_viabilidad_mision(distancia_km: float) dict
+        +__str__() str
+        +__repr__() str
     }
 
-    %% ==========================================
-    %% RELACIONES DEL SISTEMA
-    %% ==========================================
-    %% Orquestador
-    SistemaCentroControl "1" *-- "*" Dron : administra
-    SistemaCentroControl "1" *-- "*" Usuario : registra
-    SistemaCentroControl "1" *-- "*" Pedido : procesa
-    SistemaCentroControl "1" *-- "*" LogOperacion : genera y audita
+    %% =========================================================================
+    %% 6. JERARQUÍA DE EXCEPCIONES DE DOMINIO AERONÁUTICO
+    %% =========================================================================
 
-    %% Flujo de Pedidos y Usuarios
+    class Exception {
+        <<builtin>>
+    }
+
+    class BateriaInvalidaError {
+        +bateria_invalida: float
+    }
+
+    class AltitudInvalidaError {
+        +altitud_invalida: float
+    }
+
+    class EstadoMotorInvalidoError {
+        +estado_motor_invalido: str
+    }
+
+    class CoordenadaInvalidaError {
+        +coordenada_invalida: Any
+    }
+
+    class GeocodificacionError {
+        +direccion: str
+    }
+
+    class DronError {
+        +id_dron: str
+        +message: str
+    }
+
+    class ActualizarEstadoDronError {
+        +parametro: str
+    }
+
+    class EstadoDronDuplicadoError {
+        +estado_actual: bool
+    }
+
+    class AsignarTelemetriaError {
+        +objeto_invalido: Any
+    }
+
+    class TelemetriaNoAsignadaError {
+    }
+
+    class DestinoInvalidoError {
+        +destino: Any
+    }
+
+    class CategoriaDronInvalidoError {
+        +categoria: str
+        +categorias_permitidas: tuple
+    }
+
+    %% =========================================================================
+    %% RELACIONES ARQUITECTÓNICAS DEL SISTEMA
+    %% =========================================================================
+
+    %% 1. Capa de Interfaz Gráfica Web, Servidor HTTP y Consola CLI
+    InterfazWebSPA ..> ManejadorSkyRouteHTTP : consume API REST JSON
+    BaseHTTPRequestHandler <|-- ManejadorSkyRouteHTTP
+    ManejadorSkyRouteHTTP "1" --> "1" ControladorSkyRoute : delega peticiones HTTP
+    ControladorSkyRoute "1" *-- "1" SistemaCentroControl : adapta y controla
+    ControladorSkyRoute "1" *-- "1" SimuladorVuelo : ejecuta pulsos cinemáticos
+    ControladorSkyRoute "1" *-- "1" RelojSimulacion : gestiona tiempo UI
+    ControladorSkyRoute "1" o-- "1" IServicioGeocodificador : previsualiza direcciones
+    ControladorSkyRoute "1" o-- "1" ServicioClimaAburra : consulta clima por nodo
+    ControladorSkyRoute "1" o-- "1" CalculadorGeodesico : calcula distancias y viabilidad
+
+    ConsolaSkyRoute "1" *-- "1" SistemaCentroControl : orquesta por CLI
+    ConsolaSkyRoute "1" *-- "1" SimuladorVuelo : simula vuelo en consola
+    ConsolaSkyRoute "1" *-- "1" RelojSimulacion : controla reloj
+    ConsolaSkyRoute "1" o-- "1" ServicioGeocodificadorArcGIS : geocodifica pedidos
+    ConsolaSkyRoute "1" o-- "1" ServicioClimaAburra : consulta meteorología
+
+    %% 2. Orquestador Central y Motor de Simulación
+    SistemaCentroControl "1" *-- "*" Dron : administra flota
+    SistemaCentroControl "1" *-- "*" Usuario : registra usuarios
+    SistemaCentroControl "1" *-- "*" Pedido : procesa pedidos
+    SistemaCentroControl "1" *-- "*" LogOperacion : genera y audita
+    SistemaCentroControl "1" o-- "1" IServicioGeocodificador : resuelve direcciones
+    SistemaCentroControl "1" o-- "1" ServicioClimaAburra : consulta clima con caché
+    SistemaCentroControl "1" *-- "1" RelojSimulacion : mide delta t
+    SistemaCentroControl "1" *-- "1" SimuladorVuelo : avanza física de flota
+    SistemaCentroControl ..> ResumenRefrescoFlota : retorna en refresco
+    SimuladorVuelo "1" o-- "1" ICalculadorGeodesico : interpola waypoints y ETA
+    SimuladorVuelo "0..1" --> "0..1" SistemaCentroControl : registra logs de arribo y emergencia
+    SimuladorVuelo ..> Dron : integra cinemática y batería
+
+    %% 3. Geodesia y Cadena de Contingencia en Geocodificación
+    ICalculadorGeodesico <|.. CalculadorGeodesico
+    IServicioGeocodificador <|.. ServicioGeocodificadorArcGIS
+    IServicioGeocodificador <|.. ServicioGeocodificadorGoogle
+    IServicioGeocodificador <|.. ServicioGeocodificadorOSM
+    IServicioGeocodificador <|.. ServicioGeocodificadorLocal
+    ServicioGeocodificadorArcGIS "1" o-- "1" ICalculadorGeodesico : valida geocerca Aburrá
+    ServicioGeocodificadorArcGIS "1" --> "1" IServicioGeocodificador : fallback hacia OSM
+    ServicioGeocodificadorGoogle "1" o-- "1" ICalculadorGeodesico : valida geocerca Aburrá
+    ServicioGeocodificadorGoogle "1" --> "1" IServicioGeocodificador : fallback hacia OSM
+    ServicioGeocodificadorOSM "1" o-- "1" ICalculadorGeodesico : valida geocerca Aburrá
+    ServicioGeocodificadorOSM "1" --> "1" IServicioGeocodificador : fallback hacia Catálogo Local
+    ServicioGeocodificadorLocal "1" o-- "1" ICalculadorGeodesico : valida geocerca Aburrá
+
+    %% 4. Flujo de Pedidos, Usuarios y Componentes del Dron
     Pedido "*" --> "1" Usuario : solicitado por
     Pedido "0..1" --> "0..1" Dron : atendido por
+    Dron "0..1" --> "0..1" Pedido : ejecuta pedido_activo
+    Dron "1" *-- "0..1" TelemetriaDrone : monitoriza estado físico
+    Dron "1" o-- "1" ICalculadorGeodesico : usa para navegación
 
-    %% Componentes del Dron
-    Dron "1" *-- "1" TelemetriaDrone : monitoriza estado
-    Dron "1" o-- "1" CalculadorGeodesico : usa para cálculos
-
-    %% Especialización de Drones (Herencia)
+    %% 5. Especialización Polimórfica de Flota (Herencia)
     Dron <|-- DronEntregaLigera
     Dron <|-- DronCargaPesada
     Dron <|-- DronVigilancia
     Dron <|-- DronMapeo
     Dron <|-- DronInspeccion
     Dron <|-- DronRescate
+
+    %% 6. Jerarquía de Excepciones de Dominio
+    Exception <|-- BateriaInvalidaError
+    Exception <|-- AltitudInvalidaError
+    Exception <|-- EstadoMotorInvalidoError
+    Exception <|-- CoordenadaInvalidaError
+    Exception <|-- GeocodificacionError
+    Exception <|-- DronError
+    DronError <|-- ActualizarEstadoDronError
+    DronError <|-- EstadoDronDuplicadoError
+    DronError <|-- AsignarTelemetriaError
+    DronError <|-- TelemetriaNoAsignadaError
+    DronError <|-- DestinoInvalidoError
+    DronError <|-- CategoriaDronInvalidoError
+
+    TelemetriaDrone ..> BateriaInvalidaError : dispara
+    TelemetriaDrone ..> AltitudInvalidaError : dispara
+    TelemetriaDrone ..> EstadoMotorInvalidoError : dispara
+    TelemetriaDrone ..> CoordenadaInvalidaError : dispara
+    CalculadorGeodesico ..> CoordenadaInvalidaError : dispara
+    IServicioGeocodificador ..> GeocodificacionError : dispara
+    Dron ..> DronError : dispara subclases
 ```
