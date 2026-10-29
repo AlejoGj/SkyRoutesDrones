@@ -1,20 +1,18 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-theme="light">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SkyRoute Drones · Centro de Control Metropolitano</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/estilos.css">
 </head>
 <body>
-    <div class="ambient-glow" aria-hidden="true"></div>
-
     <div class="app-shell">
         <!-- ================================================================
-             BARRA FIJA SUPERIOR: BASE OLAYA HERRERA, CLIMA Y TOUR GUIADO
+             BARRA FIJA SUPERIOR: BASE OLAYA HERRERA, CLIMA, TEMA Y TOUR GUIADO
              ================================================================ -->
         <header class="topbar">
             <div class="brand-group">
@@ -28,13 +26,13 @@
                         <h1 class="brand-title">SkyRoute Drones</h1>
                         <span class="base-badge" id="baseCoordsBadge">Base Olaya Herrera · 6.2196, -75.5868</span>
                     </div>
-                    <p class="brand-subtitle">Centro de Control Metropolitano · Valle de Aburrá · Puente HTTP Nativo</p>
+                    <p class="brand-subtitle">Centro de Control Metropolitano · Valle de Aburrá · Telemetría Aeronáutica</p>
                 </div>
             </div>
 
             <div class="topbar-controls">
                 <!-- Estación Meteorológica Open-Meteo por Nodo -->
-                <div class="climate-bar" title="ServicioClimaAburra · Open-Meteo en tiempo real">
+                <div class="climate-bar" title="Condiciones atmosféricas en tiempo real">
                     <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17.7 7.7a2.5 2.5 0 1 1 1.8 4.3H2"/>
                         <path d="M9.6 4.6A2 2 0 1 1 11 8H2"/>
@@ -44,7 +42,7 @@
                     <select id="selectNodoClima" class="climate-select" aria-label="Nodo meteorológico del Valle de Aburrá"></select>
                     <span class="climate-readout" id="climateReadout">22.0 C · 11.5 km/h · 100%</span>
                     <span class="status-dot status-online" id="climateSafetyDot" title="Estado de seguridad atmosférica"></span>
-                    <button type="button" class="icon-btn" id="btnConsultarClima" title="Consultar Open-Meteo en vivo para este nodo">
+                    <button type="button" class="icon-btn" id="btnConsultarClima" title="Actualizar lectura meteorológica de este nodo">
                         <svg class="icon-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                             <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                             <path d="M3 3v5h5"/>
@@ -55,7 +53,7 @@
                 </div>
 
                 <!-- Sesión de Usuario Activo -->
-                <button type="button" class="user-pill" id="btnIrUsuarios" title="Cambiar o registrar usuario activo">
+                <button type="button" class="user-pill" id="btnIrUsuarios" title="Cambiar o registrar operador activo">
                     <span class="status-dot status-online"></span>
                     <span class="user-meta">
                         <strong id="topActiveUserName">Alejandro García Jiménez</strong>
@@ -63,12 +61,31 @@
                     </span>
                 </button>
 
-                <!-- Botón Tour Automatizado End-to-End (Opción 7 de ConsolaSkyRoute) -->
+                <!-- Conmutador de Tema (Precision Light / Dark Avionics) -->
+                <button type="button" class="theme-toggle-btn" id="btnToggleTheme" title="Alternar entre modo claro neutro y consola oscura de aviónica" aria-label="Alternar tema visual">
+                    <svg class="icon-xs" id="iconThemeDark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+                    </svg>
+                    <svg class="icon-xs is-hidden" id="iconThemeLight" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="5"/>
+                        <line x1="12" y1="1" x2="12" y2="3"/>
+                        <line x1="12" y1="21" x2="12" y2="23"/>
+                        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+                        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+                        <line x1="1" y1="12" x2="3" y2="12"/>
+                        <line x1="21" y1="12" x2="23" y2="12"/>
+                        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+                        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+                    </svg>
+                    <span id="labelToggleTheme">Consola Oscura</span>
+                </button>
+
+                <!-- Botón Tour Automatizado End-to-End -->
                 <button type="button" class="btn-primary btn-tour" id="btnIniciarTour">
                     <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <polygon points="5 3 19 12 5 21 5 3"/>
                     </svg>
-                    <span>Tour Guiado E2E</span>
+                    <span>Simulación Demostrativa</span>
                 </button>
             </div>
         </header>
@@ -83,7 +100,7 @@
                         <circle cx="12" cy="12" r="10"/>
                         <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"/>
                     </svg>
-                    <span>Operaciones y Simulación</span>
+                    <span>Operaciones y Telemetría</span>
                     <span class="tab-counter" id="badgeOperaciones">0</span>
                 </button>
 
@@ -93,7 +110,7 @@
                         <rect x="9" y="9" width="6" height="6"/>
                         <path d="M9 1v3M15 1v3M9 20v3M15 20v3M20 9h3M20 14h3M1 9h3M1 14h3"/>
                     </svg>
-                    <span>Flota y Fábrica</span>
+                    <span>Flota y Mantenimiento</span>
                     <span class="tab-counter" id="badgeFlota">6/6</span>
                 </button>
 
@@ -102,7 +119,7 @@
                         <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
                         <circle cx="12" cy="10" r="3"/>
                     </svg>
-                    <span>Despacho y Usuarios</span>
+                    <span>Despacho y Operadores</span>
                     <span class="tab-counter" id="badgeDespacho">0</span>
                 </button>
 
@@ -110,7 +127,7 @@
                     <svg class="icon-sm" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M13 2 3 14h9l-1 8 10-12h-9l1-8z"/>
                     </svg>
-                    <span>Comparador HU-10</span>
+                    <span>Rendimiento y Autonomía</span>
                 </button>
 
                 <button type="button" class="workspace-tab" data-view="bitacora">
@@ -120,7 +137,7 @@
                         <line x1="16" y1="13" x2="8" y2="13"/>
                         <line x1="16" y1="17" x2="8" y2="17"/>
                     </svg>
-                    <span>Bitácora</span>
+                    <span>Auditoría de Eventos</span>
                     <span class="tab-counter" id="badgeBitacora">1</span>
                 </button>
             </nav>
@@ -173,10 +190,10 @@
                         <article class="card">
                             <div class="card-header">
                                 <div>
-                                    <span class="eyebrow">Cola de Control</span>
-                                    <h2 class="card-title">Misiones por Despachar</h2>
+                                    <span class="eyebrow">Cola de Despacho</span>
+                                    <h2 class="card-title">Misiones Activas y Pendientes</h2>
                                 </div>
-                                <button type="button" class="btn-ghost btn-sm" id="btnNuevoPedidoRapido">
+                                <button type="button" class="btn-secondary btn-sm" id="btnNuevoPedidoRapido">
                                     + Nuevo Pedido
                                 </button>
                             </div>
@@ -186,8 +203,8 @@
                         <article class="card">
                             <div class="card-header">
                                 <div>
-                                    <span class="eyebrow">Selector de Cabina</span>
-                                    <h2 class="card-title">Aeronave en Monitoreo</h2>
+                                    <span class="eyebrow">Selector de Telemetría</span>
+                                    <h2 class="card-title">Unidades en Plataforma y Vuelo</h2>
                                 </div>
                                 <span class="mono-hint" id="opsActiveCountLabel">0 en vuelo</span>
                             </div>
@@ -201,12 +218,12 @@
                             <div class="stage-top">
                                 <div>
                                     <div class="eyebrow-row">
-                                        <span class="eyebrow" id="simEyebrow">Cabina de Simulación Cinemática</span>
+                                        <span class="eyebrow" id="simEyebrow">Consola de Navegación y Telemetría</span>
                                         <span class="status-pill" id="simStatusPill">EN PLATAFORMA</span>
                                     </div>
                                     <h2 class="stage-title" id="simTitle">Selecciona o registra una misión para iniciar</h2>
                                     <p class="stage-subtitle" id="simSubtitle">
-                                        Base Central Aeropuerto Olaya Herrera (6.219603, -75.586792) · Validación completa de autonomía ida y retorno.
+                                        Base Central Aeropuerto Olaya Herrera (6.219603, -75.586792) · Verificación automática de autonomía ida y retorno.
                                     </p>
                                 </div>
 
@@ -230,13 +247,13 @@
                                 </div>
                             </div>
 
-                            <!-- Monitor de Flota en Vuelo Concurrente (Desacoplado) -->
+                            <!-- Monitor de Flota en Vuelo Concurrente -->
                             <div class="concurrent-fleet-strip is-hidden" id="concurrentFleetStrip">
-                                <span class="fleet-strip-label">Aeronaves en tránsito simultáneo:</span>
+                                <span class="fleet-strip-label">Tránsito simultáneo activo:</span>
                                 <div class="fleet-strip-chips" id="concurrentFleetChips"></div>
                             </div>
 
-                            <!-- Indicador Lineal Minimalista de Progreso por Etapas (Base -> Destino -> Retorno) -->
+                            <!-- Vector Lineal de Progreso por Etapas (Base -> Destino -> Retorno) -->
                             <div class="linear-journey" id="linearJourneyBox">
                                 <div class="journey-track-wrap">
                                     <div class="journey-track">
@@ -275,14 +292,14 @@
                                 </div>
                             </div>
 
-                            <!-- Barra de Controles Reales (Automático Animado vs Paso a Paso Discreto Delta t) -->
+                            <!-- Barra de Controles de Simulación -->
                             <div class="sim-toolbar">
                                 <div class="mode-segmented" role="group" aria-label="Modalidad de simulación temporal">
                                     <button type="button" class="seg-btn is-active" data-sim-mode="paso" id="btnModePaso">
-                                        Paso a Paso Discreto
+                                        Paso Discreto
                                     </button>
                                     <button type="button" class="seg-btn" data-sim-mode="auto" id="btnModeAuto">
-                                        Automática Animada
+                                        Ciclo Continuo
                                     </button>
                                     <button type="button" class="seg-btn" data-sim-mode="realtime" id="btnModeRealtime">
                                         Tiempo Real (1:1)
@@ -347,13 +364,13 @@
 
                                 <!-- Maniobras de Seguridad en Vuelo -->
                                 <div class="sim-safety-actions">
-                                    <button type="button" class="btn-secondary btn-sm" id="btnOrdenarRetorno" title="RF-09 · Abortar misión actual y ordenar regreso inmediato a Olaya Herrera">
+                                    <button type="button" class="btn-secondary btn-sm" id="btnOrdenarRetorno" title="Abortar misión activa y ordenar regreso inmediato a Olaya Herrera">
                                         Retorno a Base
                                     </button>
-                                    <button type="button" class="btn-ghost btn-sm is-hidden" id="btnAterrizarManual" title="Ejecutar finalizar_retorno_en_base() dentro del radio <= 0.05 km">
+                                    <button type="button" class="btn-ghost btn-sm is-hidden" id="btnAterrizarManual" title="Confirmar aterrizaje en plataforma (radio <= 0.05 km)">
                                         Confirmar Aterrizaje
                                     </button>
-                                    <button type="button" class="btn-ghost btn-sm" id="btnReiniciarReloj" title="Reiniciar RelojSimulacion">
+                                    <button type="button" class="btn-ghost btn-sm" id="btnReiniciarReloj" title="Reiniciar reloj de simulación a cero">
                                         Reiniciar Reloj
                                     </button>
                                 </div>
@@ -367,8 +384,8 @@
                         <article class="card">
                             <div class="card-header">
                                 <div>
-                                    <span class="eyebrow">Integración Física y Geodésica</span>
-                                    <h3 class="card-title">Registro Cronológico de Pulsos de Simulación</h3>
+                                    <span class="eyebrow">Telemetría Cinemática</span>
+                                    <h3 class="card-title">Registro Cronológico de Pulsos de Vuelo</h3>
                                 </div>
                                 <span class="mono-hint" id="pulseCountLabel">0 pulsos registrados</span>
                             </div>
@@ -405,35 +422,35 @@
                  ================================================================ -->
             <section id="view-flota" class="workspace-view">
                 <div class="fleet-layout">
-                    <!-- Cuadrícula de Aeronaves + Alta desde FABRICA_DRONES -->
+                    <!-- Cuadrícula de Aeronaves + Alta de Unidades -->
                     <div class="fleet-main-col">
                         <article class="card">
                             <div class="card-header">
                                 <div>
-                                    <span class="eyebrow">Aeronaves Especializadas (6 Subclases)</span>
+                                    <span class="eyebrow">Unidades Especializadas en Servicio</span>
                                     <h2 class="card-title">Estado de la Flota Activa</h2>
                                 </div>
                                 <div class="card-header-actions">
-                                    <button type="button" class="btn-secondary btn-sm btn-realtime-flota" id="btnTiempoRealFlota" title="Activar simulación física 1:1 en tiempo real para todos los drones en vuelo (cadencia 5s/10s)">
+                                    <button type="button" class="btn-secondary btn-sm btn-realtime-flota" id="btnTiempoRealFlota" title="Activar simulación física 1:1 en tiempo real para todas las aeronaves en vuelo">
                                         <span class="pulse-indicator"></span>
                                         <span id="labelTiempoRealFlota">Tiempo Real (1:1)</span>
                                     </button>
                                     <button type="button" class="btn-secondary btn-sm" id="btnSincronizarFlota">
-                                        Sincronizar Telemetría (RF-05)
+                                        Sincronizar Telemetría
                                     </button>
                                 </div>
                             </div>
                             <div id="fleetCardsGrid" class="fleet-cards-grid"></div>
                         </article>
 
-                        <!-- Fábrica Dinámica de Drones (instanciar_dron_desde_fabrica) -->
+                        <!-- Registro e Incorporación de Nuevas Aeronaves -->
                         <article class="card">
                             <div class="card-header">
                                 <div>
-                                    <span class="eyebrow">Patrón Fábrica · FABRICA_DRONES (HU-12)</span>
+                                    <span class="eyebrow">Hangar Central · Olaya Herrera</span>
                                     <h2 class="card-title">Incorporar Nueva Aeronave a la Flota</h2>
                                 </div>
-                                <span class="rf-tag">instanciar_dron_desde_fabrica</span>
+                                <span class="rf-tag">6 Categorías Operativas</span>
                             </div>
 
                             <form id="formFabricaDron" class="form-grid">
@@ -463,41 +480,34 @@
 
                                 <div class="form-actions-full">
                                     <button type="submit" class="btn-primary">
-                                        Instanciar desde Fábrica y Agregar a Base
+                                        Incorporar Aeronave a Plataforma
                                     </button>
                                 </div>
                             </form>
                         </article>
                     </div>
 
-                    <!-- Columna Inspector Técnico: __str__, __repr__, Recarga e Inyección de Telemetría -->
+                    <!-- Columna Inspector de Unidad con Divulgación Progresiva (Progressive Disclosure) -->
                     <aside class="fleet-inspector-col">
                         <article class="card sticky-inspector">
                             <div class="card-header">
                                 <div>
-                                    <span class="eyebrow">Inspector Técnico de Entidad</span>
+                                    <span class="eyebrow">Inspector de Unidad</span>
                                     <h2 class="card-title" id="inspDroneTitle">DRON-ENT-01</h2>
                                 </div>
                                 <span class="status-pill" id="inspDroneStatus">DISPONIBLE</span>
                             </div>
 
-                            <!-- Bloque 1: Diagnóstico Polimórfico y Ficha Multilínea __str__ -->
+                            <!-- Nivel Primario: Diagnóstico de Sistemas y Estación de Recarga -->
                             <div class="inspector-section">
-                                <span class="section-label">Diagnóstico de Sistemas Especializados</span>
+                                <span class="section-label">Estado de Sistemas a Bordo</span>
                                 <p class="systems-callout" id="inspSystemsText"></p>
-
-                                <span class="section-label">Ficha Técnica Oficial (__str__)</span>
-                                <pre class="code-sheet" id="inspFichaStr"></pre>
-
-                                <span class="section-label">Representación Oficial (__repr__)</span>
-                                <code class="repr-box" id="inspFichaRepr"></code>
                             </div>
 
-                            <!-- Bloque 2: Estación de Recarga en Base (dron.recargar_bateria) -->
                             <div class="inspector-section">
                                 <div class="section-row">
-                                    <span class="section-label">Estación de Recarga en Base</span>
-                                    <span class="mono-hint">dron.recargar_bateria()</span>
+                                    <span class="section-label">Estación de Recarga en Plataforma</span>
+                                    <span class="mono-hint">Mínimo operativo 20%</span>
                                 </div>
                                 <div class="recharge-row">
                                     <input type="range" id="rangeRecarga" min="20" max="100" step="5" value="100">
@@ -508,60 +518,72 @@
                                 </div>
                             </div>
 
-                            <!-- Bloque 3: Inyector Manual de Telemetría y Validación RN-01..RN-05 -->
-                            <div class="inspector-section">
-                                <div class="section-row">
-                                    <span class="section-label">Inyector de Trama Telemetría (RF-01 / RF-02)</span>
-                                </div>
-                                <div class="preset-chips">
-                                    <button type="button" class="chip-btn" data-tele-preset="nominal">Base Nominal</button>
-                                    <button type="button" class="chip-btn" data-tele-preset="bateria_baja">Batería 12%</button>
-                                    <button type="button" class="chip-btn" data-tele-preset="error_altitud">Probar &gt;120 m</button>
-                                    <button type="button" class="chip-btn" data-tele-preset="error_aburra">Probar Fuera Aburrá</button>
-                                </div>
-
-                                <form id="formTelemetriaManual" class="compact-tele-form">
-                                    <div class="tele-grid-2">
-                                        <div class="field">
-                                            <label for="teleBat">Batería (%)</label>
-                                            <input type="number" id="teleBat" step="0.5" value="100">
-                                        </div>
-                                        <div class="field">
-                                            <label for="teleAlt">Altitud (m)</label>
-                                            <input type="number" id="teleAlt" step="1" value="0">
-                                        </div>
-                                        <div class="field">
-                                            <label for="teleMotores">Motores</label>
-                                            <select id="teleMotores">
-                                                <option value="STANDBY">STANDBY</option>
-                                                <option value="APAGADOS">APAGADOS</option>
-                                                <option value="EN_VUELO">EN_VUELO</option>
-                                                <option value="EMERGENCIA">EMERGENCIA</option>
-                                            </select>
-                                        </div>
-                                        <div class="field">
-                                            <label for="teleLat">Latitud</label>
-                                            <input type="number" id="teleLat" step="0.0001" value="6.2196">
-                                        </div>
-                                        <div class="field">
-                                            <label for="teleLon">Longitud</label>
-                                            <input type="number" id="teleLon" step="0.0001" value="-75.5868">
-                                        </div>
-                                        <div class="field field-end">
-                                            <button type="submit" class="btn-secondary btn-full">Validar e Inyectar</button>
-                                        </div>
+                            <!-- Divulgación Progresiva 1: Modo Ingeniería (Inyector Manual de Tramas) -->
+                            <details class="tech-disclosure">
+                                <summary class="tech-disclosure-summary">
+                                    <span>Modo Ingeniería · Inyector de Tramas</span>
+                                    <span class="disclosure-badge">Pruebas de Límite</span>
+                                </summary>
+                                <div class="tech-disclosure-body">
+                                    <div class="preset-chips">
+                                        <button type="button" class="chip-btn" data-tele-preset="nominal">Base Nominal</button>
+                                        <button type="button" class="chip-btn" data-tele-preset="bateria_baja">Batería 12%</button>
+                                        <button type="button" class="chip-btn" data-tele-preset="error_altitud">Probar &gt;120 m</button>
+                                        <button type="button" class="chip-btn" data-tele-preset="error_aburra">Probar Fuera Aburrá</button>
                                     </div>
-                                </form>
-                            </div>
 
-                            <!-- Bloque 4: Bitácora Inmutable historial_telemetria -->
-                            <div class="inspector-section">
-                                <div class="section-row">
-                                    <span class="section-label">Bitácora Inmutable (historial_telemetria)</span>
-                                    <span class="mono-hint" id="inspTeleCount">1 trama</span>
+                                    <form id="formTelemetriaManual" class="compact-tele-form">
+                                        <div class="tele-grid-2">
+                                            <div class="field">
+                                                <label for="teleBat">Batería (%)</label>
+                                                <input type="number" id="teleBat" step="0.5" value="100">
+                                            </div>
+                                            <div class="field">
+                                                <label for="teleAlt">Altitud (m)</label>
+                                                <input type="number" id="teleAlt" step="1" value="0">
+                                            </div>
+                                            <div class="field">
+                                                <label for="teleMotores">Motores</label>
+                                                <select id="teleMotores">
+                                                    <option value="STANDBY">STANDBY</option>
+                                                    <option value="APAGADOS">APAGADOS</option>
+                                                    <option value="EN_VUELO">EN_VUELO</option>
+                                                    <option value="EMERGENCIA">EMERGENCIA</option>
+                                                </select>
+                                            </div>
+                                            <div class="field">
+                                                <label for="teleLat">Latitud</label>
+                                                <input type="number" id="teleLat" step="0.0001" value="6.2196">
+                                            </div>
+                                            <div class="field">
+                                                <label for="teleLon">Longitud</label>
+                                                <input type="number" id="teleLon" step="0.0001" value="-75.5868">
+                                            </div>
+                                            <div class="field field-end">
+                                                <button type="submit" class="btn-secondary btn-full">Validar e Inyectar</button>
+                                            </div>
+                                        </div>
+                                    </form>
                                 </div>
-                                <div class="immutable-log-list" id="inspTeleHistory"></div>
-                            </div>
+                            </details>
+
+                            <!-- Divulgación Progresiva 2: Diagnóstico de Bajo Nivel y Tramas Crudas -->
+                            <details class="tech-disclosure">
+                                <summary class="tech-disclosure-summary">
+                                    <span>Diagnóstico de Bajo Nivel · Ficha y Tramas</span>
+                                    <span class="disclosure-badge mono" id="inspTeleCount">1 trama</span>
+                                </summary>
+                                <div class="tech-disclosure-body">
+                                    <span class="section-label">Ficha Estructurada de Entidad</span>
+                                    <pre class="code-sheet" id="inspFichaStr"></pre>
+
+                                    <span class="section-label">Estado de Instancia</span>
+                                    <code class="repr-box" id="inspFichaRepr"></code>
+
+                                    <span class="section-label">Historial Inmutable de Tramas</span>
+                                    <div class="immutable-log-list" id="inspTeleHistory"></div>
+                                </div>
+                            </details>
                         </article>
                     </aside>
                 </div>
@@ -577,10 +599,10 @@
                         <article class="card">
                             <div class="card-header">
                                 <div>
-                                    <span class="eyebrow">Registro de Solicitud (ArcGIS / OSM / Local)</span>
+                                    <span class="eyebrow">Resolución Geodésica Metropolitana</span>
                                     <h2 class="card-title">Nuevo Pedido de Operación Aérea</h2>
                                 </div>
-                                <span class="rf-tag">RN-05 Valle de Aburrá</span>
+                                <span class="rf-tag">Geocerca Valle de Aburrá</span>
                             </div>
 
                             <form id="formNuevoPedido" class="stack-form">
@@ -609,7 +631,7 @@
                                 <!-- Conmutador Dirección vs Coordenadas -->
                                 <div class="mode-segmented" role="group" aria-label="Método de destino">
                                     <button type="button" class="seg-btn is-active" data-dest-mode="direccion" id="btnModoDireccion">
-                                        Dirección Vial o Hito (Geocodificador)
+                                        Dirección Vial o Hito
                                     </button>
                                     <button type="button" class="seg-btn" data-dest-mode="coordenadas" id="btnModoCoordenadas">
                                         Coordenadas Directas (Lat, Lon)
@@ -629,7 +651,7 @@
                                     </div>
 
                                     <div class="suggestion-bar">
-                                        <span class="suggestion-label">Ejemplos rápidos:</span>
+                                        <span class="suggestion-label">Puntos de referencia:</span>
                                         <div id="addressSuggestions" class="preset-chips"></div>
                                     </div>
 
@@ -660,8 +682,8 @@
                         <article class="card" id="cardGestionUsuarios">
                             <div class="card-header">
                                 <div>
-                                    <span class="eyebrow">Perfiles y Roles Autorizados (RF-06)</span>
-                                    <h2 class="card-title">Usuarios Registrados</h2>
+                                    <span class="eyebrow">Control de Acceso y Sesiones</span>
+                                    <h2 class="card-title">Operadores y Usuarios Registrados</h2>
                                 </div>
                             </div>
 
@@ -718,22 +740,22 @@
             </section>
 
             <!-- ================================================================
-                 ESPACIO 4: COMPARADOR POLIMÓRFICO DE EFICIENCIA (HU-10)
+                 ESPACIO 4: ANÁLISIS COMPARATIVO DE EFICIENCIA Y AUTONOMÍA
                  ================================================================ -->
             <section id="view-polimorfismo" class="workspace-view">
                 <article class="card">
                     <div class="poly-header">
                         <div>
-                            <span class="eyebrow">Demostración de Polimorfismo · predecir_viabilidad_mision(distancia_km)</span>
-                            <h2 class="card-title">Comparativa Polimórfica de Consumo Energético y Autonomía (HU-10)</h2>
+                            <span class="eyebrow">Simulación Energética Multidron</span>
+                            <h2 class="card-title">Análisis Comparativo de Consumo Energético y Autonomía</h2>
                             <p class="card-desc">
-                                Evalúa simultáneamente toda la flota activa con su estado real de batería. Cada subclase calcula su propio gasto energético y diagnóstico según sus sensores, rotores y equipamiento.
+                                Evalúa simultáneamente toda la flota activa con su nivel real de batería. Cada aeronave proyecta su consumo energético según su perfil aerodinámico, rotores y equipamiento a bordo.
                             </p>
                         </div>
 
                         <div class="poly-controls">
                             <label class="inline-field">
-                                <span>Distancia a evaluar (km)</span>
+                                <span>Distancia objetivo (km)</span>
                                 <input type="number" id="inputPolyDist" min="1" max="120" step="0.5" value="15.0">
                             </label>
                             <input type="range" id="rangePolyDist" min="1" max="60" step="0.5" value="15.0">
@@ -753,13 +775,13 @@
                             <thead>
                                 <tr>
                                     <th>Aeronave</th>
-                                    <th>Subclase / Categoría</th>
-                                    <th>Tasa</th>
+                                    <th>Categoría Operativa</th>
+                                    <th>Tasa Nominal</th>
                                     <th>Batería Actual</th>
                                     <th>Consumo Proyectado</th>
                                     <th>Remanente</th>
                                     <th>Viable</th>
-                                    <th>Diagnóstico Polimórfico de Autonomía</th>
+                                    <th>Diagnóstico de Autonomía</th>
                                 </tr>
                             </thead>
                             <tbody id="polyTableBody"></tbody>
@@ -776,14 +798,14 @@
                     <article class="card">
                         <div class="card-header">
                             <div>
-                                <span class="eyebrow">Auditoría Inmutable de Eventos · LogOperacion</span>
+                                <span class="eyebrow">Registro Histórico Inmutable</span>
                                 <h2 class="card-title">Bitácora Operacional del Centro de Control</h2>
                             </div>
                             <div class="audit-controls">
                                 <input type="search" id="inputBuscarLog" class="search-input" placeholder="Filtrar por evento, dron, pedido o detalle...">
                                 <select id="selectFormatoLog" class="compact-select">
                                     <option value="tabla">Vista Estructurada</option>
-                                    <option value="consola">Formato Oficial (formatear_registro)</option>
+                                    <option value="consola">Vista de Consola (Texto Plano)</option>
                                 </select>
                             </div>
                         </div>
@@ -805,17 +827,21 @@
                         </div>
 
                         <pre id="auditRawContainer" class="code-sheet is-hidden"></pre>
-                    </article>
 
-                    <aside class="audit-side">
-                        <article class="card">
-                            <span class="eyebrow">Estado Textual del Orquestador</span>
-                            <h3 class="card-title">SistemaCentroControl (__str__)</h3>
-                            <pre class="code-sheet" id="torreStrBox"></pre>
-                            <span class="section-label">Representación (__repr__)</span>
-                            <code class="repr-box" id="torreReprBox"></code>
-                        </article>
-                    </aside>
+                        <!-- Divulgación Progresiva: Estado Interno del Orquestador bajo demanda -->
+                        <details class="tech-disclosure audit-disclosure">
+                            <summary class="tech-disclosure-summary">
+                                <span>Modo Diagnóstico · Inspeccionar Estado Interno del Orquestador</span>
+                                <span class="disclosure-badge">Torre de Control</span>
+                            </summary>
+                            <div class="tech-disclosure-body">
+                                <span class="section-label">Resumen Textual del Sistema</span>
+                                <pre class="code-sheet" id="torreStrBox"></pre>
+                                <span class="section-label">Estado de Instancia</span>
+                                <code class="repr-box" id="torreReprBox"></code>
+                            </div>
+                        </details>
+                    </article>
                 </div>
             </section>
         </main>
