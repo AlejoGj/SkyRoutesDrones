@@ -1,5 +1,5 @@
 /* ==========================================================================
-   SKYROUTE DRONES · LÓGICA DE INTERFAZ Y PUENTE CON HTTP.SERVER NATIVO (v2)
+   SKYROUTE DRONES · LÓGICA DE INTERFAZ Y PUENTE CON HTTP.SERVER NATIVO (v3)
    100% acoplada a las entidades reales de Develop · Cero datos hardcodeados
    ========================================================================== */
 
@@ -21,9 +21,30 @@
         distanciaPolimorfismoKm: 15.0,
         datosPolimorfismo: null,
         selectsInicializados: false,
+        tema: localStorage.getItem("skyroute_theme") || "light",
     };
 
     const $ = (id) => document.getElementById(id);
+
+    function aplicarTema(tema) {
+        const temaValido = tema === "dark" ? "dark" : "light";
+        estadoUI.tema = temaValido;
+        document.documentElement.setAttribute("data-theme", temaValido);
+        try {
+            localStorage.setItem("skyroute_theme", temaValido);
+        } catch (_e) {}
+
+        const iconDark = $("iconThemeDark");
+        const iconLight = $("iconThemeLight");
+        const label = $("labelToggleTheme");
+        if (iconDark && iconLight) {
+            iconDark.classList.toggle("is-hidden", temaValido === "dark");
+            iconLight.classList.toggle("is-hidden", temaValido !== "dark");
+        }
+        if (label) {
+            label.textContent = temaValido === "dark" ? "Modo Claro" : "Consola Oscura";
+        }
+    }
 
     function escaparHtml(valor) {
         return String(valor ?? "")
@@ -59,7 +80,7 @@
                 <span class="mini-bat-track">
                     <span class="mini-bat-fill ${mod}" style="width: ${pct.toFixed(1)}%;"></span>
                 </span>
-                <span>${pct.toFixed(1)}%</span>
+                <span class="tabular-nums">${pct.toFixed(1)}%</span>
             </span>
         `;
     }
@@ -196,7 +217,7 @@
         selCatFabrica.innerHTML = snapshot.categorias_fabrica
             .map(
                 (cat) =>
-                    `<option value="${escaparHtml(cat)}">${escaparHtml(snapshot.etiquetas_categoria[cat] || cat)} · ${escaparHtml(snapshot.esquema_fabrica[cat]?.clase || cat)}</option>`
+                    `<option value="${escaparHtml(cat)}">${escaparHtml(snapshot.etiquetas_categoria[cat] || cat)} (${escaparHtml(cat)})</option>`
             )
             .join("");
         renderizarCamposDinamicosFabrica(selCatFabrica.value);
@@ -284,7 +305,7 @@
                             <button type="button" class="btn-primary btn-sm" data-despegar-pedido="${escaparHtml(p.id_pedido)}" data-modo-desp="TEMPORAL">
                                 Autorizar Despegue
                             </button>
-                            <button type="button" class="btn-secondary btn-sm" data-despegar-pedido="${escaparHtml(p.id_pedido)}" data-modo-desp="INSTANTANEO" title="Ejecutar despachar_mision() síncrono">
+                            <button type="button" class="btn-secondary btn-sm" data-despegar-pedido="${escaparHtml(p.id_pedido)}" data-modo-desp="INSTANTANEO" title="Ejecutar despacho completo síncrono">
                                 Instantáneo
                             </button>
                         `;
@@ -341,7 +362,7 @@
                             <small>${escaparHtml(d.modelo_aeronave)} · ${escaparHtml(d.categoria_etiqueta)}</small>
                         </div>
                         <div class="drone-mini-right">
-                            <div>${d.bateria.toFixed(1)}%</div>
+                            <div class="tabular-nums">${d.bateria.toFixed(1)}%</div>
                             <small>${escaparHtml(d.estado_operacional.replace(/_/g, " "))}</small>
                         </div>
                     </button>
@@ -381,7 +402,7 @@
         const sesion = snapshot.sesiones_vuelo[dron.id_dron] || null;
         const progreso = dron.progreso_lineal || { fase_ciclo: "EN_PLATAFORMA", progreso_ciclo_pct: 0, etapa_actual: 0 };
 
-        $("simEyebrow").textContent = `${dron.clase_python} · ${dron.categoria_etiqueta}`;
+        $("simEyebrow").textContent = `${dron.categoria_etiqueta} · ${dron.modelo_aeronave}`;
         const pill = $("simStatusPill");
         pill.textContent = dron.etiqueta_estado;
         pill.className = `status-pill ${clasePildoraEstado(dron.estado_operacional)}`;
@@ -394,7 +415,7 @@
         } else {
             $("simTitle").textContent = `${dron.id_dron} · ${dron.modelo_aeronave}`;
             $("simSubtitle").textContent =
-                `Estacionado en Aeropuerto Olaya Herrera · Consumo polimórfico: ${dron.tasa_consumo_bat_km.toFixed(2)}% bat/km · Asigna y despega un pedido para simular.`;
+                `Estacionado en Aeropuerto Olaya Herrera · Consumo nominal: ${dron.tasa_consumo_bat_km.toFixed(2)}% bat/km · Asigna y despega un pedido para simular.`;
         }
 
         $("simStatBateria").textContent = `${dron.bateria.toFixed(1)}%`;
@@ -543,7 +564,7 @@
 
     function progressDestSubtitle(sesion, progreso) {
         if (progreso.abortado) {
-            return "Misión abortada (RF-09)";
+            return "Misión abortada (Retorno anticipado)";
         }
         if (progreso.etapa_actual >= 2) {
             return `Entregado · (${sesion.coordenadas_destino[0].toFixed(4)}, ${sesion.coordenadas_destino[1].toFixed(4)})`;
@@ -715,7 +736,7 @@
                         <div class="drone-card-head">
                             <div>
                                 <strong>${escaparHtml(d.id_dron)}</strong>
-                                <small>${escaparHtml(d.modelo_aeronave)} · ${escaparHtml(d.clase_python)}</small>
+                                <small>${escaparHtml(d.modelo_aeronave)} · ${escaparHtml(d.categoria_etiqueta)}</small>
                             </div>
                             <span class="status-pill ${clasePildoraEstado(d.estado_operacional)}">
                                 ${escaparHtml(d.estado_operacional.replace(/_/g, " "))}
@@ -942,7 +963,7 @@
     }
 
     // ==========================================================================
-    // ESPACIO 4: COMPARADOR POLIMÓRFICO (HU-10)
+    // ESPACIO 4: COMPARADOR DE RENDIMIENTO ENERGÉTICO
     // ==========================================================================
 
     async function cargarComparativaPolimorfica(distanciaKm, sincronizarControles = true) {
@@ -967,7 +988,7 @@
                             <strong>${escaparHtml(r.id_dron)}</strong>
                             <span>${r.consumo_estimado_pct.toFixed(1)}% cons.</span>
                         </div>
-                        <small>${escaparHtml(r.tipo_dron)} · ${r.tasa_consumo_bat_km.toFixed(2)}% / km</small>
+                        <small>${escaparHtml(r.categoria_etiqueta || r.tipo_dron)} · ${r.tasa_consumo_bat_km.toFixed(2)}% / km</small>
                         <div class="poly-meter">
                             <div class="poly-meter-fill ${excede ? "is-over" : ""}" style="width: ${anchoPct.toFixed(1)}%;"></div>
                         </div>
@@ -982,7 +1003,7 @@
                 (r) => `
                     <tr>
                         <td class="mono"><strong>${escaparHtml(r.id_dron)}</strong><br><small>${escaparHtml(r.modelo_aeronave)}</small></td>
-                        <td>${escaparHtml(r.tipo_dron)}<br><small>${escaparHtml(r.categoria_etiqueta)}</small></td>
+                        <td>${escaparHtml(r.categoria_etiqueta)}<br><small class="mono-hint">${escaparHtml(r.tipo_dron)}</small></td>
                         <td class="mono">${r.tasa_consumo_bat_km.toFixed(2)}% / km</td>
                         <td>${barraBateriaMiniHtml(r.bateria_actual_pct)}</td>
                         <td class="mono"><strong>${r.consumo_estimado_pct.toFixed(1)}%</strong></td>
@@ -1051,6 +1072,14 @@
     // ==========================================================================
 
     function enlazarEventos() {
+        // Conmutador de Tema (Modo Claro / Consola Oscura)
+        const btnTema = $("btnToggleTheme");
+        if (btnTema) {
+            btnTema.addEventListener("click", () => {
+                aplicarTema(estadoUI.tema === "dark" ? "light" : "dark");
+            });
+        }
+
         // Pestañas de espacios de trabajo
         document.querySelectorAll(".workspace-tab").forEach((btn) => {
             btn.addEventListener("click", () => cambiarVista(btn.dataset.view));
@@ -1363,7 +1392,7 @@
             if (estadoUI.snapshot) renderizarDespachoYUsuarios(estadoUI.snapshot);
         });
 
-        // Espacio 4: Comparador Polimórfico HU-10
+        // Espacio 4: Comparador de Rendimiento Energético
         $("inputPolyDist").addEventListener("change", (ev) => {
             cargarComparativaPolimorfica(ev.target.value, true).catch(() => {});
         });
@@ -1520,6 +1549,7 @@
     // ==========================================================================
 
     async function iniciar() {
+        aplicarTema(estadoUI.tema);
         enlazarEventos();
         try {
             const estadoInicial = await peticionAPI("/api/estado");
