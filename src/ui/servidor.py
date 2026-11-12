@@ -44,6 +44,7 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
     candado: threading.RLock
 
     def log_message(self, format: str, *args: Any) -> None:
+        """Suprime los registros estándar por consola para mantener limpia la salida de terminal."""
         return
 
     # ==========================================================================
@@ -51,6 +52,13 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
     # ==========================================================================
 
     def _enviar_json(self, payload: dict[str, Any], codigo_http: int = HTTPStatus.OK) -> None:
+        """
+        Emite una respuesta HTTP estructurada en formato JSON con encabezados anti-caché.
+
+        Args:
+            payload (dict[str, Any]): Diccionario con los datos a serializar en JSON.
+            codigo_http (int, optional): Código de estado HTTP. Defaults to HTTPStatus.OK (200).
+        """
         cuerpo = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self.send_response(codigo_http)
         self.send_header("Content-Type", "application/json; charset=utf-8")
@@ -60,6 +68,12 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
         self.wfile.write(cuerpo)
 
     def _servir_archivo_estatico(self, nombre_relativo: str) -> None:
+        """
+        Sirve archivos estáticos locales (HTML, CSS, JS, SVG) previniendo ataques de Path Traversal.
+
+        Args:
+            nombre_relativo (str): Ruta relativa del recurso solicitado respecto a `src/ui/estaticos/`.
+        """
         ruta_limpia = nombre_relativo.lstrip("/") or "index.html"
         ruta_archivo = (DIRECTORIO_ESTATICOS / ruta_limpia).resolve()
 
@@ -84,6 +98,12 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
         self.wfile.write(contenido)
 
     def _leer_cuerpo_json(self) -> dict[str, Any]:
+        """
+        Lee y decodifica el cuerpo de una petición HTTP entrante a partir del encabezado `Content-Length`.
+
+        Returns:
+            dict[str, Any]: Carga útil JSON decodificada como diccionario de Python.
+        """
         longitud = int(self.headers.get("Content-Length", "0"))
         if longitud <= 0:
             return {}
@@ -97,6 +117,15 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
     # ==========================================================================
 
     def do_GET(self) -> None:
+        """
+        Atiende solicitudes HTTP GET de solo lectura y despacho de recursos estáticos.
+
+        Rutas soportadas:
+        - `/api/estado`: Genera el snapshot completo del sistema.
+        - `/api/clima?nodo=<nombre>`: Consulta el reporte meteorológico para un nodo.
+        - `/api/polimorfismo/viabilidad?distancia_km=<d>`: Tabla comparativa de viabilidad.
+        - Archivos estáticos (`/`, `/index.html`, `/estilos.css`, `/app.js`).
+        """
         url = urlparse(self.path)
         ruta = url.path
         params = parse_qs(url.query)
@@ -132,6 +161,25 @@ class ManejadorSkyRouteHTTP(BaseHTTPRequestHandler):
             self._enviar_json(self.controlador.formatear_excepcion(exc), HTTPStatus.BAD_REQUEST)
 
     def do_POST(self) -> None:
+        """
+        Atiende solicitudes HTTP POST con mutación de estado sincronizadas mediante candado reentrante (`RLock`).
+
+        Rutas soportadas:
+        - `/api/geocodificar`: Previsualiza coordenadas de una dirección urbana.
+        - `/api/usuarios`: Registra o alterna el usuario activo en sesión.
+        - `/api/flota/fabrica`: Da de alta una nueva aeronave desde `FABRICA_DRONES`.
+        - `/api/flota/recargar`: Recarga la batería de un dron en vertipuerto.
+        - `/api/flota/telemetria`: Inyecta tramas sensoriales o refresca la flota.
+        - `/api/pedidos`: Registra un nuevo pedido con destino geográfico dual.
+        - `/api/pedidos/asignar`: Vincula una aeronave por autonomía de circuito.
+        - `/api/pedidos/cancelar`: Cancela una solicitud en estado pendiente o asignado.
+        - `/api/misiones/despegar`: Autoriza y ejecuta el despegue físico a 30 m de altitud.
+        - `/api/misiones/retorno`: Ordena el regreso obligatorio a Olaya Herrera.
+        - `/api/misiones/aterrizar`: Finaliza manualmente el aterrizaje en vertipuerto.
+        - `/api/simulacion/paso`: Avanza pulsos discretos cinemáticos (manual, auto o 1:1).
+        - `/api/simulacion/reloj`: Reinicia, pausa o reanuda el reloj monotónico.
+        - `/api/demo/preparar`: Ejecuta los preparativos del Tour Guiado End-to-End.
+        """
         url = urlparse(self.path)
         ruta = url.path
 
@@ -222,7 +270,23 @@ def crear_servidor(
     puerto_inicial: int = 8000,
     controlador: ControladorSkyRoute | None = None,
 ) -> tuple[ThreadingHTTPServer, int]:
-    """Crea una instancia de ThreadingHTTPServer buscando automáticamente un puerto libre."""
+    """
+    Crea una instancia de ThreadingHTTPServer buscando automáticamente un puerto libre.
+
+    Itera sobre una ventana de hasta 15 puertos consecutivos a partir de `puerto_inicial`
+    para resolver automáticamente colisiones con otros procesos locales.
+
+    Args:
+        host (str, optional): Dirección IP local de enlace. Defaults to "127.0.0.1".
+        puerto_inicial (int, optional): Puerto TCP inicial a intentar. Defaults to 8000.
+        controlador (ControladorSkyRoute | None, optional): Instancia del adaptador inyectada.
+
+    Returns:
+        tuple[ThreadingHTTPServer, int]: Servidor HTTP instanciado y puerto efectivo enlazado.
+
+    Raises:
+        RuntimeError: Si no se encuentra un puerto libre tras 15 intentos consecutivos.
+    """
     instancia_ctrl = controlador if controlador is not None else ControladorSkyRoute()
     candado = threading.RLock()
 
@@ -250,7 +314,14 @@ def iniciar_aplicacion(
     puerto: int = 8000,
     abrir_navegador: bool = True,
 ) -> None:
-    """Inicia el servidor local de SkyRoute y abre la consola gráfica en el navegador predeterminado."""
+    """
+    Inicia el servidor local de SkyRoute y abre la consola gráfica en el navegador predeterminado.
+
+    Args:
+        host (str, optional): Host de escucha local. Defaults to "127.0.0.1".
+        puerto (int, optional): Puerto inicial de escucha. Defaults to 8000.
+        abrir_navegador (bool, optional): Si True, lanza automáticamente el navegador web predeterminado.
+    """
     servidor, puerto_real = crear_servidor(host=host, puerto_inicial=puerto)
     url = f"http://{host}:{puerto_real}"
 
@@ -274,6 +345,7 @@ def iniciar_aplicacion(
 
 
 def main() -> None:
+    """Punto de entrada principal para la ejecución por línea de comandos del servidor web UI."""
     parser = argparse.ArgumentParser(description="Servidor UI nativo para SkyRoute Drones.")
     parser.add_argument("--host", default="127.0.0.1", help="Host de escucha local (default: 127.0.0.1)")
     parser.add_argument("--puerto", type=int, default=8000, help="Puerto HTTP inicial (default: 8000)")
